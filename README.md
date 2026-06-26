@@ -1,6 +1,6 @@
 # NetApp Configurator
 
-A web-based interactive tool for configuring NetApp storage controllers, analyzing ASUP configurations, and checking compatibility.
+A web-based interactive tool for configuring NetApp storage controllers, StorageGrid, and checking compatibility.
 
 ## Features
 
