@@ -2815,6 +2815,67 @@ function syncVariableMonitorUI() {
   });
 }
 
+async function downloadSourceFiles() {
+  if (window.location.protocol === 'file:') {
+    alert("Downloading the source code repository zip is not supported when running the offline single-file app via 'file://'.\n\nPlease download the codebase directly from the GitHub repository: https://github.com/ebeauzec/netapp-configurator");
+    return;
+  }
+  const files = [
+    'index.html',
+    'style.css',
+    'app.js',
+    'asup_examples.js',
+    'sevenzip_js.js',
+    'sevenzip_wasm.wasm',
+    'bundle_offline.py',
+    'README.md',
+    '.gitignore',
+    'build_app.sh',
+    'main.swift',
+    'Info.plist',
+    'NetAppConfigurator.bat'
+  ];
+  
+  const btn = document.getElementById("btnDownloadRepo");
+  if (!btn) return;
+  
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader-2" class="animate-spin"></i> Downloading...';
+  if (window.lucide) window.lucide.createIcons();
+  
+  try {
+    const zip = new JSZip();
+    const folder = zip.folder("netapp-configurator");
+    
+    await Promise.all(files.map(async (filename) => {
+      try {
+        const response = await fetch(filename);
+        if (!response.ok) throw new Error(`Status ${response.status}`);
+        const blob = await response.blob();
+        folder.file(filename, blob);
+      } catch (err) {
+        console.error(`Skipping ${filename} due to download error:`, err);
+      }
+    }));
+    
+    const content = await zip.generateAsync({ type: "blob" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(content);
+    link.download = "netapp-configurator.zip";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.error("Error creating ZIP download:", err);
+    alert("Error compiling ZIP archive: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+    if (window.lucide) window.lucide.createIcons();
+  }
+}
+
 // 6. EVENT LISTENERS
 function setupEventListeners() {
   
@@ -2828,6 +2889,10 @@ function setupEventListeners() {
   if (btnLoadConfig && configFileInput) {
     btnLoadConfig.addEventListener("click", () => configFileInput.click());
     configFileInput.addEventListener("change", importConfigurationFromFile);
+  }
+  const btnDownloadRepo = document.getElementById("btnDownloadRepo");
+  if (btnDownloadRepo) {
+    btnDownloadRepo.addEventListener("click", downloadSourceFiles);
   }
 
   // Navigation
