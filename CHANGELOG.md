@@ -1,0 +1,25 @@
+# Changelog
+
+All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
+
+## [1.3.0] - 2026-07-05
+
+### Added
+- **Dynamic Repository Downloader**: Added a "Download Source" button in the application header that compiles all project files into a ZIP archive on-the-fly using `JSZip` directly in the browser.
+- **Local File Security Alerts**: Added smart detection for the `file://` protocol. If run from the compiled offline bundle, it detects the local context and alerts the user to download from the GitHub repository instead of triggering CORS-blocked fetches.
+
+### Changed
+- **Git Remote Alignment**: Updated the default remote configuration to point to the active repository: `https://github.com/ebeauzec/NetApp.git`.
+- **Version Updates**: Bumped the application version from `1.2.0` to `1.3.0` (build version `2`) in the configuration headers (`app.js`), UI layout (`index.html`), and macOS application settings (`Info.plist`).
+
+---
+
+## [1.2.0] - 2026-06-26
+
+### Added
+- **WASM Extraction**: Decoupled the 7-Zip decompression components (`sevenzip_js.js` and `sevenzip_wasm.wasm`) and moved them to the workspace root.
+- **Automated Bundle Compiler**: Created `bundle_offline.py` to inline all JS, CSS, and WebAssembly dependencies into a standalone single-file app `NetAppConfigurator_Offline.html`.
+
+### Fixed
+- **Google Drive VFS Locks**: Resolved `OSError: [Errno 22]` lock issues under Windows Google Drive by keeping WASM files in the root folder instead of the locked `scratch/` directory.
+- **Codebase Restoration**: Successfully reconstructed code modules (`app.js`, `index.html`, `style.css`, `asup_examples.js`) from corrupt files.
