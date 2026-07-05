@@ -860,7 +860,16 @@ function updateVersionOptions() {
   if (!versionSelect) return;
   versionSelect.innerHTML = "";
   
-  const versions = state.platform === "ontap" ? ONTAP_VERSIONS : STORAGEGRID_VERSIONS;
+  const versions = state.platform === "ontap" ? ONTAP_VERSIONS : STORAGEGRID_VERSIONS;
+  if (state.version) {
+    const isOntapVersion = state.version.startsWith("9.");
+    const isSgVersion = state.version.startsWith("11.") || state.version.startsWith("12.");
+    if (state.platform === "ontap" && isSgVersion) {
+      state.version = versions[0];
+    } else if (state.platform === "storagegrid" && isOntapVersion) {
+      state.version = versions[0];
+    }
+  }
   const listToUse = [...versions];
   if (state.version && !listToUse.includes(state.version)) {
     listToUse.unshift(state.version);
@@ -3728,7 +3737,7 @@ function updateSizingDropdownOptions() {
     ];
 
     const sgVals = sgControllers.map(c => c.val);
-    if (prevController && !sgVals.includes(prevController)) {
+    if (false && prevController && !sgVals.includes(prevController)) {
       sgControllers.push({ val: prevController, label: `${prevController} (Parsed from ASUP)` });
     }
 
@@ -3793,7 +3802,7 @@ function updateSizingDropdownOptions() {
     }
 
     const ontapVals = ontapControllers.map(c => c.val);
-    if (prevController && !ontapVals.includes(prevController)) {
+    if (false && prevController && !ontapVals.includes(prevController)) {
       ontapControllers.push({ val: prevController, label: `${prevController} (Parsed from ASUP)` });
     }
     
@@ -3877,7 +3886,7 @@ function updateShelfOptions() {
     }
     
     const shelfVals = shelves.map(s => s.val);
-    if (prevShelf && !shelfVals.includes(prevShelf)) {
+    if (false && prevShelf && !shelfVals.includes(prevShelf)) {
       shelves.push({ val: prevShelf, label: `${prevShelf} (Parsed from ASUP)` });
     }
     
@@ -3899,7 +3908,7 @@ function updateShelfOptions() {
     ];
     
     const shelfVals = shelves.map(s => s.val);
-    if (prevShelf && !shelfVals.includes(prevShelf)) {
+    if (false && prevShelf && !shelfVals.includes(prevShelf)) {
       shelves.push({ val: prevShelf, label: `${prevShelf} (Parsed from ASUP)` });
     }
     
