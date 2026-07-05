@@ -14,33 +14,41 @@ The application is built entirely as a client-side front-end app (HTML, CSS, JS,
 
 ---
 
-## 🛠 How to Run
+## 🛠 How to Run (Preferred Zero-Dependency Method)
 
-Because the application uses modern JavaScript modules (ES6) and WebAssembly (for client-side 7-Zip extraction of ASUP bundles), you have two distinct ways to run it:
+The configurator is designed to be **completely portable and self-contained with zero dependencies**. You do not need to install node modules, configure web servers, run command lines, or compile anything to use it. 
 
-### Option A: Modular Development Version (Local HTTP Server)
-Recommended for development and editing. Browsers restrict WebAssembly and ES6 modules over the `file://` protocol due to CORS security rules. To bypass this, run a lightweight HTTP server in the repository folder:
+### 🚀 Recommended: Run Standalone Offline
+Simply double-click the **`NetAppConfigurator_Offline.html`** file in your browser:
+*   **Direct Web Browser**: Open `NetAppConfigurator_Offline.html` directly in Chrome, Edge, Safari, Firefox, or Brave.
+*   **Windows Shortcut**: Double-click `NetAppConfigurator.bat` to launch it immediately in Microsoft Edge.
+*   **macOS Wrapper**: Double-click the compiled native wrapper `NetAppConfigurator.app` (which launches the offline app inside a native Cocoa/WebKit window).
 
-*   **Python (Pre-installed on most systems)**:
+*Everything required to run the configurator (including styles, configuration databases, and the 7-Zip parser WebAssembly engine) is entirely self-contained within this single offline HTML file.*
+
+---
+
+## 💻 Alternative: Running Modular Files (For Development Only)
+
+If you are modifying the source code and want to test changes dynamically without rebuilding the offline file every time:
+
+### 1. Run a Local HTTP Server
+Browsers enforce security (CORS) restrictions over the `file://` protocol when loading separate ES6 JavaScript modules or WebAssembly files locally. To bypass this during development, run a lightweight server:
+*   **Python**:
     ```bash
     python -m http.server 8000
     ```
-*   **NodeJS (`http-server`)**:
+*   **NodeJS**:
     ```bash
     npx http-server -p 8000
     ```
-Once running, open your browser and navigate to **`http://localhost:8000`**.
+Once running, navigate to `http://localhost:8000`.
 
-### Option B: Standalone Offline Version (`NetAppConfigurator_Offline.html`)
-Recommended for offline use, customer sites, or secure environments. You can compile the entire modular application—including all styles, scripts, and the 7-Zip WebAssembly binary—into a single offline HTML document.
-
-1.  Compile the offline bundle by running:
-    ```bash
-    python bundle_offline.py
-    ```
-2.  Once compiled, open the generated **`NetAppConfigurator_Offline.html`** file:
-    *   **Windows**: Double-click `NetAppConfigurator.bat` or the `.html` file.
-    *   **macOS**: Double-click the compiled native wrapper `NetAppConfigurator.app` (which embeds the bundle in a native WKWebView).
+### 2. Compile Changes to the Offline App
+After testing and finalizing your code modifications in the modular files (`app.js`, `index.html`, `style.css`), compile them back into the self-contained offline bundle by running:
+```bash
+python bundle_offline.py
+```
 
 ---
 
