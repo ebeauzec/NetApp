@@ -3719,7 +3719,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
 
               <div>
 
-                <label for="sizingNodeCount">Node Count in Cluster</label>
+                <label for="sizingNodeCount" id="nodeCountLabel">Node Count in Cluster</label>
 
                 <select class="form-control" id="sizingNodeCount">
 
@@ -5853,7 +5853,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
 
           <div class="form-group">
 
-            <label>Cluster Interconnect Connectivity</label>
+            <label id="cablingInterconnectLabel">Cluster Interconnect Connectivity</label>
 
             <div class="options-grid">
 
@@ -5861,7 +5861,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
 
                 <div class="option-icon"><i data-lucide="shuffle"></i></div>
 
-                <span class="option-title">Switched Cluster</span>
+                <span class="option-title" id="cablingSwitchedTitle">Switched Cluster</span>
 
               </div>
 
@@ -5869,7 +5869,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
 
                 <div class="option-icon"><i data-lucide="arrow-left-right"></i></div>
 
-                <span class="option-title">Switchless Direct-Connect</span>
+                <span class="option-title" id="cablingDirectTitle">Switchless Direct-Connect</span>
 
               </div>
 
@@ -5881,7 +5881,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
 
           <div class="form-group" id="clusterSwitchModelGroup">
 
-            <label for="clusterSwitchModel">Cluster Switch Model</label>
+            <label for="clusterSwitchModel" id="clusterSwitchModelLabel">Cluster Switch Model</label>
 
             <select class="form-control" id="clusterSwitchModel">
 
@@ -14264,6 +14264,11 @@ function updateSizingDropdownOptions() {
   
 
   if (!controllerSelect || !shelfSelect || !nodeCountSelect) return;
+  
+  const nodeCountLabel = document.getElementById("nodeCountLabel");
+  if (nodeCountLabel) {
+    nodeCountLabel.innerText = isSg ? "Node Count in Grid" : "Node Count in Cluster";
+  }
 
   
 
@@ -18102,6 +18107,24 @@ function setDeploymentMode(mode) {
 function setPlatform(platform) {
 
   state.platform = platform;
+  
+  const isSgLabel = platform === "storagegrid";
+  const cablingInterconnectLabel = document.getElementById("cablingInterconnectLabel");
+  if (cablingInterconnectLabel) {
+    cablingInterconnectLabel.innerText = isSgLabel ? "Grid Interconnect Connectivity" : "Cluster Interconnect Connectivity";
+  }
+  const cablingSwitchedTitle = document.getElementById("cablingSwitchedTitle");
+  if (cablingSwitchedTitle) {
+    cablingSwitchedTitle.innerText = isSgLabel ? "Switched Grid" : "Switched Cluster";
+  }
+  const cablingDirectTitle = document.getElementById("cablingDirectTitle");
+  if (cablingDirectTitle) {
+    cablingDirectTitle.innerText = isSgLabel ? "Switchless Direct-Connect Grid" : "Switchless Direct-Connect";
+  }
+  const clusterSwitchModelLabel = document.getElementById("clusterSwitchModelLabel");
+  if (clusterSwitchModelLabel) {
+    clusterSwitchModelLabel.innerText = isSgLabel ? "Grid Switch Model" : "Cluster Switch Model";
+  }
 
   document.getElementById("platformOntap").classList.toggle("selected", platform === "ontap");
 
@@ -24973,6 +24996,7 @@ function vserverSanitize(str) {
 
 
 function syncUIWithState() {
+  setPlatform(state.platform);
 
   document.getElementById("modeGreenfield").classList.toggle("selected", state.mode === "greenfield");
 

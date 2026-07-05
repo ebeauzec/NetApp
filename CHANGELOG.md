@@ -2,6 +2,16 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.4.0] - 2026-07-05
+
+### Removed
+- **AutoSupport Parser & Dependencies**: Removed the local WASM decompressors `sevenzip_wasm.wasm`, `sevenzip_js.js`, and `asup_examples.js`.
+- **Pako Dependency**: Removed `pako.js` library from compiler script and index layout.
+
+### Fixed
+- **StorageGRID Dropdown Bug**: Fixed issues where ONTAP's `9.19.1` and `A150` options would remain selected or stuck when toggling to StorageGRID.
+- **FAS Platform Labels**: Cleaned up `/ AFX` labels from FAS options and logs.
+
 ## [1.3.0] - 2026-07-05
 
 ### Added

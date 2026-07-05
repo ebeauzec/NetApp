@@ -1,16 +1,18 @@
 # NetApp Solutions Architect Configurator & Code Generator
 
-A premium, interactive web-based configurator designed for NetApp solutions architects. It allows you to model ONTAP storage controllers, configure StorageGrid environments, parse AutoSupport (ASUP) logs to import architectures automatically, and generate deployment code.
+A premium, interactive web-based configurator designed for NetApp solutions architects. It allows you to model ONTAP storage controllers, configure StorageGRID environments, and generate deployment code.
 
-The application is built entirely as a client-side front-end app (HTML, CSS, JS, and WebAssembly) with no server-side backend required.
+The application is built entirely as a client-side front-end app (HTML, CSS, and JS) with no server-side backend required.
 
 ---
 
-## 🚀 What's New in v1.3.0
+## 🚀 What's New in v1.4.0
 
-*   **Dynamic Source Downloader**: A new **Download Source** button is integrated into the header actions. It fetches all active codebase files relative to the host, packages them into a `.zip` archive on-the-fly via `JSZip`, and downloads it to your computer.
-*   **Security Handling for `file://`**: Added smart checks for pages running on the local filesystem (`file://`). If run in offline mode, it catches blocked fetches and displays instructions for downloading from GitHub.
-*   **StorageGrid Updates**: Merged documentation updates incorporating StorageGrid configurations directly into the layout.
+*   **AutoSupport Cleanup**: Completely removed the heavy, unmaintained AutoSupport log parser and its decompressors (`sevenzip_wasm.wasm`, `sevenzip_js.js`, and `pako.js`). This optimizes load times and reduces bundle footprint.
+*   **Platform Selection Dropdown Fixes**: Fixed version/controller context synchronization bugs so that toggling between ONTAP and StorageGRID immediately resets dropdown selections to valid target defaults.
+*   **FAS Naming Cleanup**: Removed incorrect `/ AFX` labels from FAS options and warning dialogs.
+*   **Dynamic Source Downloader**: A **Download Source** button is integrated into the header actions. It packages all active codebase files into a `.zip` archive on-the-fly via `JSZip` directly in the browser.
+*   **Security Handling for `file://`**: Added checks for pages running on the local filesystem (`file://`) to catch blocked fetches and display local download instructions.
 
 ---
 
@@ -24,7 +26,7 @@ Simply double-click the **`NetAppConfigurator_Offline.html`** file in your brows
 *   **Windows Shortcut**: Double-click `NetAppConfigurator.bat` to launch it immediately in Microsoft Edge.
 *   **macOS Wrapper**: Double-click the compiled native wrapper `NetAppConfigurator.app` (which launches the offline app inside a native Cocoa/WebKit window).
 
-*Everything required to run the configurator (including styles, configuration databases, and the 7-Zip parser WebAssembly engine) is entirely self-contained within this single offline HTML file.*
+*Everything required to run the configurator (including styles, layout, and configuration databases) is entirely self-contained within this single offline HTML file.*
 
 ---
 
@@ -33,7 +35,7 @@ Simply double-click the **`NetAppConfigurator_Offline.html`** file in your brows
 If you are modifying the source code and want to test changes dynamically without rebuilding the offline file every time:
 
 ### 1. Run a Local HTTP Server
-Browsers enforce security (CORS) restrictions over the `file://` protocol when loading separate ES6 JavaScript modules or WebAssembly files locally. To bypass this during development, run a lightweight server:
+Browsers enforce security (CORS) restrictions over the `file://` protocol when loading separate ES6 JavaScript modules locally. To bypass this during development, run a lightweight server:
 *   **Python**:
     ```bash
     python -m http.server 8000
@@ -52,39 +54,13 @@ python bundle_offline.py
 
 ---
 
-## 📋 Features & Usage Guide
-
-### 1. Multi-Step Wizard Configuration
-Move through the left navigation pane to configure:
-*   **Platform & Version**: Model ONTAP or StorageGrid deployment versions.
-*   **Access Protocols**: Configure NFS, CIFS/SMB, iSCSI, FC, FCoE, and NVMe endpoints.
-*   **Chassis & Controller**: Select chassis types, disk shelves, and high-availability controller pairings.
-*   **Disks & Aggregates**: Model RAID types, spare drives, data aggregates, and volume sizing.
-*   **Network & Ports**: Define MTU settings, interface groups, VLANs, and port speeds.
-*   **Tenant & Integrations**: Set up FabricPool targets, S3 load balancer configurations, and identity federation.
-*   **Summary & Code Preview**: Generate ready-to-run automation code (CLI commands, Ansible playbooks) based on your wizard settings.
-
-### 2. AutoSupport (ASUP) Bundle Parser
-Import existing architectures in seconds:
-*   Drag and drop a `.txt` log or compressed `.7z` / `.zip` AutoSupport bundle into the parser card.
-*   The integrated browser-based WebAssembly decompressor extracts the files locally and auto-fills configurations.
-
-### 3. Save & Load Config States
-*   **Save Config**: Downloads your current wizard selections into a portable `.json` configuration file.
-*   **Import Config**: Upload a saved `.json` file to restore your configuration state.
-
----
-
 ## 📂 Project Structure
 
 ```
 NetApp/
 ├── index.html                   # HTML entry point (Modular)
 ├── style.css                    # Design styles (CSS variables, dark mode)
-├── app.js                       # Configurator logic, wizard controller & parsing
-├── asup_examples.js             # Mock AutoSupport sample structures
-├── sevenzip_js.js               # WebAssembly JS wrapper for 7-zip
-├── sevenzip_wasm.wasm           # 7-Zip WebAssembly binary
+├── app.js                       # Configurator logic and wizard controller
 ├── bundle_offline.py            # Python packager script to compile the offline app
 ├── README.md                    # Core project documentation
 ├── CHANGELOG.md                 # Change records

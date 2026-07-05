@@ -3714,7 +3714,12 @@ function updateSizingDropdownOptions() {
   const shelfSelect = document.getElementById("sizingShelfType");
   const nodeCountSelect = document.getElementById("sizingNodeCount");
   
-  if (!controllerSelect || !shelfSelect || !nodeCountSelect) return;
+  if (!controllerSelect || !shelfSelect || !nodeCountSelect) return;
+  
+  const nodeCountLabel = document.getElementById("nodeCountLabel");
+  if (nodeCountLabel) {
+    nodeCountLabel.innerText = isSg ? "Node Count in Grid" : "Node Count in Cluster";
+  }
   
   // Re-populate controller dropdown
   const prevController = state.sizing.controller;
@@ -5633,7 +5638,25 @@ function setDeploymentMode(mode) {
 }
 
 function setPlatform(platform) {
-  state.platform = platform;
+  state.platform = platform;
+  
+  const isSgLabel = platform === "storagegrid";
+  const cablingInterconnectLabel = document.getElementById("cablingInterconnectLabel");
+  if (cablingInterconnectLabel) {
+    cablingInterconnectLabel.innerText = isSgLabel ? "Grid Interconnect Connectivity" : "Cluster Interconnect Connectivity";
+  }
+  const cablingSwitchedTitle = document.getElementById("cablingSwitchedTitle");
+  if (cablingSwitchedTitle) {
+    cablingSwitchedTitle.innerText = isSgLabel ? "Switched Grid" : "Switched Cluster";
+  }
+  const cablingDirectTitle = document.getElementById("cablingDirectTitle");
+  if (cablingDirectTitle) {
+    cablingDirectTitle.innerText = isSgLabel ? "Switchless Direct-Connect Grid" : "Switchless Direct-Connect";
+  }
+  const clusterSwitchModelLabel = document.getElementById("clusterSwitchModelLabel");
+  if (clusterSwitchModelLabel) {
+    clusterSwitchModelLabel.innerText = isSgLabel ? "Grid Switch Model" : "Cluster Switch Model";
+  }
   document.getElementById("platformOntap").classList.toggle("selected", platform === "ontap");
   document.getElementById("platformStoragegrid").classList.toggle("selected", platform === "storagegrid");
   
@@ -9069,7 +9092,8 @@ function vserverSanitize(str) {
   return str.replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
-function syncUIWithState() {
+function syncUIWithState() {
+  setPlatform(state.platform);
   document.getElementById("modeGreenfield").classList.toggle("selected", state.mode === "greenfield");
   document.getElementById("modeExisting").classList.toggle("selected", state.mode === "existing");
   document.getElementById("platformOntap").classList.toggle("selected", state.platform === "ontap");

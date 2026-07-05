@@ -381,7 +381,7 @@
                 </select>
               </div>
               <div>
-                <label for="sizingNodeCount">Node Count in Cluster</label>
+                <label for="sizingNodeCount" id="nodeCountLabel">Node Count in Cluster</label>
                 <select class="form-control" id="sizingNodeCount">
                   <option value="2" selected>2 Nodes (1 HA Pair)</option>
                   <option value="4">4 Nodes (2 HA Pairs)</option>
@@ -1448,21 +1448,21 @@
           </div>
 
           <div class="form-group">
-            <label>Cluster Interconnect Connectivity</label>
+            <label id="cablingInterconnectLabel">Cluster Interconnect Connectivity</label>
             <div class="options-grid">
               <div class="option-card selected" id="cablingSwitched" data-cluster-cabling="switched">
                 <div class="option-icon"><i data-lucide="shuffle"></i></div>
-                <span class="option-title">Switched Cluster</span>
+                <span class="option-title" id="cablingSwitchedTitle">Switched Cluster</span>
               </div>
               <div class="option-card" id="cablingDirect" data-cluster-cabling="direct">
                 <div class="option-icon"><i data-lucide="arrow-left-right"></i></div>
-                <span class="option-title">Switchless Direct-Connect</span>
+                <span class="option-title" id="cablingDirectTitle">Switchless Direct-Connect</span>
               </div>
             </div>
           </div>
 
           <div class="form-group" id="clusterSwitchModelGroup">
-            <label for="clusterSwitchModel">Cluster Switch Model</label>
+            <label for="clusterSwitchModel" id="clusterSwitchModelLabel">Cluster Switch Model</label>
             <select class="form-control" id="clusterSwitchModel">
               <option value="Nexus3132QV" selected>Cisco Nexus 3132Q-V (40/100 GbE)</option>
               <option value="SN2100">NVIDIA Mellanox SN2100 (100 GbE)</option>
