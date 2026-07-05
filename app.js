@@ -1,4 +1,4 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.2.0)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.3.0)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
