@@ -1,4 +1,4 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.3.0)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.4.0)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -808,7 +808,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (savedStateStr) {
       const parsed = JSON.parse(savedStateStr);
       if (parsed && (parsed.platform === "ontap" || parsed.platform === "storagegrid")) {
-        Object.assign(state, parsed);
+        Object.assign(state, parsed);
+        state.mode = "greenfield";
       }
     }
   } catch (e) {
@@ -5992,7 +5993,8 @@ async function importConfigurationFromFile(e) {
     const parsedState = JSON.parse(text);
     
     if (parsedState && (parsedState.platform === "ontap" || parsedState.platform === "storagegrid")) {
-      Object.assign(state, parsedState);
+      Object.assign(state, parsedState);
+      state.mode = "greenfield";
       syncUIWithState();
       
       e.target.value = "";
@@ -8259,8 +8261,8 @@ function validateForm() {
         warnings.push({
           step: 4,
           title: "Performance Constraint Warning",
-          msg: `Volume "${vol.name}": Required IOPS (${volIops}) is high for FAS / AFX hybrid systems. Upgrading to NetApp AFF or ASA is recommended.`,
-          why: "FAS/AFX arrays utilize spinning disks with SSD caching. Heavy, high-IOPS random workloads can saturate aggregate read/write buffers.",
+          msg: `Volume "${vol.name}": Required IOPS (${volIops}) is high for FAS hybrid systems. Upgrading to NetApp AFF or ASA is recommended.`,
+          why: "FAS arrays utilize spinning disks with SSD caching. Heavy, high-IOPS random workloads can saturate aggregate read/write buffers.",
           fix: "Upgrade the underlying target hardware platform profile to AFF or ASA for all-flash performance, or lower IOPS expectations."
         });
       }
@@ -8483,7 +8485,7 @@ function validateForm() {
         warnings.push({
           step: 1,
           title: "Suboptimal Protocol Recommendation",
-          msg: "NVMe protocols are not recommended for FAS / AFX hybrid systems. Use NetApp AFF or ASA for NVMe performance.",
+          msg: "NVMe protocols are not recommended for FAS hybrid systems. Use NetApp AFF or ASA for NVMe performance.",
           why: "NVMe protocols require high-throughput backplanes and direct flash storage to deliver latency benefits. Spinners/caching bottle NVMe benefits.",
           fix: "Change protocol to iSCSI or FC on Step 1, or change the hardware profile to AFF/ASA."
         });
@@ -8492,7 +8494,7 @@ function validateForm() {
         warnings.push({
           step: 5,
           title: "Platform Workload Match Info",
-          msg: "FAS / AFX is capacity-optimized hybrid storage. For high-performance database workloads (Oracle/SQL) or virtualization, NetApp AFF or ASA is recommended.",
+          msg: "FAS is capacity-optimized hybrid storage. For high-performance database workloads (Oracle/SQL) or virtualization, NetApp AFF or ASA is recommended.",
           why: "Database random write logs and VM datastores are highly sensitive to seek latencies. SAS/SATA drives introduce rotational delay.",
           fix: "Confirm if hybrid storage performance fits your Service Level Agreements (SLA), or switch to All-Flash."
         });
@@ -10063,7 +10065,7 @@ function renderArchitectureGuide() {
   if (state.platform === "ontap") {
     if (state.ontapPlatform === "aff") platformLabel = "ONTAP AFF (All-Flash FAS)";
     else if (state.ontapPlatform === "asa") platformLabel = "ONTAP ASA (All-Flash SAN Array)";
-    else if (state.ontapPlatform === "afx") platformLabel = "ONTAP FAS / AFX (Capacity Hybrid)";
+    else if (state.ontapPlatform === "afx") platformLabel = "ONTAP FAS (Capacity Hybrid)";
   } else {
     platformLabel = "StorageGRID Object Store";
   }

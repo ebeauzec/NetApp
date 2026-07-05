@@ -2,7 +2,7 @@ scratch/
 *.zip
 *.pkgf
 *.app/
-NetAppConfigurator_Offline.html
+
 extract_working.py
 inspect_offline.py
 tmp_extract/

@@ -16,11 +16,7 @@ CDNS = {
         "placeholder": '<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>',
         "type": "script"
     },
-    "pako_js": {
-        "url": "https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js",
-        "placeholder": '<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>',
-        "type": "script"
-    },
+
     "prism_js": {
         "url": "https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js",
         "placeholder": '<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>',
@@ -82,21 +78,6 @@ with open(os.path.join(base_dir, "style.css"), "r", encoding="utf-8") as f:
     style_css = f.read()
 html = html.replace('<link rel="stylesheet" href="style.css">', f"<style>\n{style_css}\n</style>")
 # 4. Inline local JS scripts
-print("Inlining local sevenzip_js.js...")
-with open(os.path.join(base_dir, "sevenzip_js.js"), "r", encoding="utf-8") as f:
-    sevenzip_js = f.read()
-html = html.replace('<script src="sevenzip_js.js"></script>', f"<script>\n{sevenzip_js}\n</script>")
-
-print("Inlining local sevenzip_wasm.wasm as base64...")
-import base64
-with open(os.path.join(base_dir, "sevenzip_wasm.wasm"), "rb") as f:
-    wasm_base64 = base64.b64encode(f.read()).decode("utf-8")
-html = html.replace("WASM_BASE64_PLACEHOLDER", wasm_base64)
-
-print("Inlining local asup_examples.js...")
-with open(os.path.join(base_dir, "asup_examples.js"), "r", encoding="utf-8") as f:
-    asup_js = f.read()
-html = html.replace('<script src="asup_examples.js"></script>', f"<script>\n{asup_js}\n</script>")
 
 print("Inlining local app.js...")
 with open(os.path.join(base_dir, "app.js"), "r", encoding="utf-8") as f:

@@ -156,7 +156,7 @@
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.3.0</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.4.0</span>
       </div>
     </header>
 
@@ -244,7 +244,7 @@
             <p class="step-description">Select your storage platform and deployment type.</p>
           </div>
 
-          <div class="form-group">
+          <div class="form-group" style="display: none;">
             <label>Deployment Mode</label>
             <div class="options-grid">
               <div class="option-card selected" id="modeGreenfield" data-mode="greenfield">
@@ -286,7 +286,7 @@
             <select class="form-control" id="ontapPlatform">
               <option value="aff" selected>NetApp AFF (All-Flash FAS) - Unified File & Block</option>
               <option value="asa">NetApp ASA (All-Flash SAN Array) - Block-Only High Performance</option>
-              <option value="afx">NetApp FAS / AFX (Fabric-Attached Storage) - Capacity Hybrid</option>
+              <option value="afx">NetApp FAS (Fabric-Attached Storage) - Capacity Hybrid</option>
             </select>
           </div>
 
@@ -1942,12 +1942,12 @@
 
   <!-- CDN scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-  <script src="sevenzip_js.js"></script>
-  <script>
-    // Placeholder for offline build script to inject sevenzip_wasm.wasm as base64
-    window.SEVENZIP_WASM_BASE64 = "WASM_BASE64_PLACEHOLDER";
-  </script>
+
+
+
+
+
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
@@ -1955,7 +1955,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   
   <!-- App scripts -->
-  <script src="asup_examples.js"></script>
+
   <script src="app.js"></script>
 </body>
 </html>
