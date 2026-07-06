@@ -80,3 +80,16 @@ This repository is optimized to deploy directly to GitHub Pages.
 3.  Choose the **`main`** branch and the **`/ (root)`** folder.
 4.  Click **Save**.
 5.  Your page will be live at `https://ebeauzec.github.io/NetApp/`.
+
+
+---
+
+## ⚖️ License & Legal Disclaimer
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for the full text.
+
+> [!CAUTION]
+> **LEGAL DISCLAIMER & INDEMNIFICATION:**
+> This tool is an independent simulator and is not affiliated with NetApp. All configurations, command scripts, and topologies are provided **"AS IS"** for simulation and educational purposes only.
+> 
+> In no event shall the author (**Eugene Beauzec**) or repository owner be liable for any direct, indirect, incidental, special, or consequential damages (including, but not limited to, configuration errors, hardware damage, data loss, downtime, or business interruption) arising out of the use or inability to use this software. The user assumes 100% of the risk and is solely responsible for verifying configurations against official manufacturer documentation before deploying them to any storage systems.

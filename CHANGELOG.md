@@ -2,6 +2,14 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.4.1] - 2026-07-06
+
+### Added
+- **Legal License & Indemnification Terms**: Created a LICENSE file in the repository root detailing MIT license terms, plus a strong liability disclaimer.
+- **UI Disclaimer Card**: Added a red warning card in the final Review & Generate wizard step containing explicit legal disclaimers.
+- **In-Zip License Bundle**: Bundled `LICENSE.txt` automatically inside generated output design ZIP archives.
+- **Documentation Disclaimers**: Appended legal disclaimer notes to README.md.
+
 ## [1.4.0] - 2026-07-05
 
 ### Removed
