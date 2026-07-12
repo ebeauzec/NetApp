@@ -9441,39 +9441,37 @@ function downloadConfigurationBundle() {
     zip.file(docFilename, docContent);
     zip.file(summaryFilename, summaryContent);
     zip.file("netapp_config.json", summaryContent);
-    const licenseText = `MIT License
+    const licenseText = `MIT License\n\nCopyright (c) 2026 Eugene Beauzec\n\n... (Refer to LICENSE.txt inside the project folder for the full MIT terms, Intellectual Property Rights, and Legal Disclaimer) ...\n\n## Ownership, Intellectual Property Rights and Independent Development
 
-Copyright (c) 2026 Eugene Beauzec
+This software application, including without limitation its source code, object code, documentation, technical specifications, architecture, designs, workflows, configurations, prompts, scripts, build materials, databases, user interfaces, and all related materials, content and developments, whether existing now or created in the future, is the sole and exclusive intellectual property of *Eugene Beauzec*.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+All rights, title and interest in and to the software, including all copyright, economic rights, moral rights to the extent applicable, neighbouring rights, database rights, know-how, trade secrets, inventions, improvements, derivative works, updates, enhancements and all other intellectual property rights, are and shall remain exclusively vested in *Eugene Beauzec*, unless expressly transferred by him under a separate written agreement signed by him.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The software was independently conceived, authored, developed, tested and assembled by *Eugene Beauzec* on his own time and using independent tools, resources and development environments. The software was not created as a work-for-hire, commissioned work, employment deliverable, client assignment, internal project, sponsored project, or contractual obligation for any employer, former employer, client, sponsor, platform provider, user, contributor or third party.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+No employer, former employer, client, sponsor, platform provider, user, contributor or third party shall acquire any ownership interest, licence, royalty, profit-share, assignment right, benefit, claim, control, or other right in or to the software by reason of Eugene Beauzec’s past or present employment, sponsorship, administrative status, visa status, immigration status, professional relationship, access to the software, use of the software, feedback, contribution, or use of independent development tools.
 
-=========================================================================
-LEGAL DISCLAIMER AND INDEMNIFICATION
-=========================================================================
+The software does not contain, incorporate, derive from, or rely upon any confidential information, proprietary material, customer data, trade secrets, private repositories, internal systems, credentials, unpublished documentation, business plans, source code, technical materials, employer-provided resources, or non-public information belonging to any employer, former employer, client, sponsor, platform provider, user, contributor or third party.
+
+Any use of third-party tools, including generative-AI assisted development tools, was carried out solely as an independent development aid under Eugene Beauzec’s personal direction, review, testing, selection and control. No confidential, proprietary, customer, internal, employer-owned, client-owned, or trade-secret information of any employer, former employer, client, sponsor, platform provider, user, contributor or third party was submitted to, uploaded into, disclosed to, or used with such tools in connection with the development of the software.
+
+All rights not expressly granted in writing by Eugene Beauzec are strictly reserved. No person or entity may copy, reproduce, modify, adapt, translate, publish, distribute, commercialise, sublicense, sell, assign, transfer, pledge, reverse engineer, remove attribution from, or claim authorship or ownership of the software, in whole or in part, except as expressly authorised in writing by Eugene Beauzec.
+
+Any permitted use of the software is subject to the licence terms expressly stated by Eugene Beauzec. Nothing in this notice shall be interpreted as granting any implied licence, ownership right, commercial right, assignment, waiver, consent, or permission beyond what is expressly granted in writing.
+
+If any third-party proprietary material is credibly identified as having been inadvertently included in the software, Eugene Beauzec reserves the right to remove, replace or remediate such material promptly, without admission of liability and without prejudice to his ownership of the remaining software.
+
+Any references to third-party products, services, companies, platforms, trademarks, technologies or tools are made solely for identification, compatibility, interoperability, technical, or documentation purposes. Such references do not imply any affiliation, sponsorship, endorsement, approval, authorisation, partnership, licence, or commercial relationship with the relevant third-party owner. All third-party trademarks, product names, company names and service names remain the property of their respective owners.
+
+Copyright © 2026 Eugene Beauzec. All Rights Reserved.\n\n### LEGAL DISCLAIMER AND INDEMNIFICATION
+
 This tool is an independent sizing simulator and is not officially affiliated with, endorsed by, or representing NetApp. All generated configurations, Ansible playbooks, CLI commands, performance models, and architectural drawings are provided "AS IS" without warranty of any kind, express or implied.
 
 By using this software or deploying configurations generated by it, you agree to the following terms:
-1. NO WARRANTY: The author and repository owner make no warranties regarding the accuracy, completeness, viability, or performance characteristics of any configuration or scripts generated by this tool.
-2. LIMITATION of LIABILITY: In no event shall the author, repository owner, or contributors be liable for any claims, damages, liabilities, or losses (including, but not limited to, hardware failure, aggregate allocation errors, data corruption, network loops, security vulnerabilities, or business interruption) arising out of the use, misuse, or inability to use this software or its generated configurations.
-3. INDEMNIFICATION: You agree to fully indemnify, defend, and hold harmless the author (Eugene Beauzec) and any project contributors from and against any and all claims, demands, damages, costs, or expenses (including legal fees) arising from your deployment of configurations, scripts, or advice generated by this tool.
-4. MANDATORY VERIFICATION: You are solely responsible for manually verifying and testing all outputs against official product documentation and vendor specifications prior to implementing them in any staging or production environment.
-`;
+1. **NO WARRANTY:** The author and repository owner make no warranties regarding the accuracy, completeness, viability, or performance characteristics of any configuration or scripts generated by this tool.
+2. **LIMITATION OF LIABILITY:** In no event shall the author, repository owner, or contributors be liable for any claims, damages, liabilities, or losses (including, but not limited to, hardware failure, aggregate allocation errors, data corruption, network loops, security vulnerabilities, or business interruption) arising out of the use, misuse, or inability to use this software or its generated configurations.
+3. **INDEMNIFICATION:** You agree to fully indemnify, defend, and hold harmless the author (Eugene Beauzec) and any project contributors from and against any and all claims, demands, damages, costs, or expenses (including legal fees) arising from your deployment of configurations, scripts, or advice generated by this tool.
+4. **MANDATORY VERIFICATION:** You are solely responsible for manually verifying and testing all outputs against official product documentation and vendor specifications prior to implementing them in any staging or production environment.`;
     zip.file("LICENSE.txt", licenseText);
 
     zip.generateAsync({ type: "blob" }).then((content) => {
