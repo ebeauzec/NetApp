@@ -1,9 +1,9 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.4.1)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.5.0)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
 const ONTAP_VERSIONS = ["9.19.1", "9.18.1", "9.17.1", "9.16.1", "9.15.1", "9.14.1", "9.13.1", "9.12.1", "9.11.1", "9.10.1", "9.9.1", "9.8.0", "9.7.0"];
-const STORAGEGRID_VERSIONS = ["12.0", "11.9", "11.8", "11.7", "11.6", "11.5"];
+const STORAGEGRID_VERSIONS = ["12.1", "12.0", "11.9", "11.8", "11.7", "11.6", "11.5"];
 const CISCO_VERSIONS = ["9.3.9", "9.2.2", "8.4.2"];
 const BROCADE_VERSIONS = ["9.2.0", "9.1.0", "9.0.1", "8.2.3"];
 
@@ -3754,7 +3754,7 @@ function updateSizingDropdownOptions() {
     });
     
     if (!sgControllers.map(c => c.val).includes(prevController)) {
-      state.sizing.controller = "SG5860";
+      state.sizing.controller = "SGF6212";
     }
   } else {
     let ontapControllers = [];
@@ -3950,12 +3950,12 @@ function updateDiskSizeOptions() {
       sizes = ["100GB", "500GB", "1TB", "2TB", "3TB", "4TB", "5TB"];
       defaultSize = "1TB";
     } else if (shelfType === "built_in_12" || shelfType === "expansion_12" || shelfType === "built_in_60" || shelfType === "expansion_60") {
-      sizes = ["4TB", "8TB", "12TB", "16TB", "18TB", "20TB", "22TB", "1.6TB SSD", "7.6TB SSD"];
+      sizes = ["4TB", "8TB", "12TB", "16TB", "18TB", "20TB", "22TB", "1.6TB SSD", "7.6TB SSD", "15.3TB SSD", "30.6TB SSD"];
       defaultSize = "16TB";
     }
   } else {
     if (shelfType === "NS224") {
-      sizes = ["1.9TB", "3.8TB", "7.6TB", "15.3TB", "30.6TB"];
+      sizes = ["1.9TB", "3.8TB", "7.6TB", "15.3TB", "30.6TB", "61.4TB"];
       defaultSize = "3.8TB";
     } else if (shelfType === "DS224C") {
       sizes = ["960GB", "1.9TB", "3.8TB", "7.6TB"];
@@ -4175,7 +4175,7 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
     slotPriority = [1, 2, 4, 5]; // slot 3 is smart I/O
   } else if (m.includes("A250") || m.includes("C250") || m.includes("A150") || m.includes("ASA_A250") || m.includes("ASA_C250") || m.includes("ASA_A150")) {
     slotPriority = [1]; // mezzanine slot
-  } else if (m.includes("FAS70") || m.includes("FAS8700") || m.includes("FAS9500")) {
+  } else if (m.includes("FAS70") || m.includes("FAS8700") || m.includes("FAS9500") || m.includes("FAS90") || m.includes("FAS70")) {
     slotPriority = [3, 4, 5, 6];
   } else if (m.includes("FAS2750")) {
     slotPriority = [1];
@@ -4208,7 +4208,7 @@ function getControllerPorts(model) {
   const m = (model || "").toUpperCase();
   if (m.includes("A1K") || m.includes("A90") || m.includes("C80") || m.includes("ASA_A90") || m.includes("ASA_C80") || m.includes("A900") || m.includes("C800") || m.includes("ASA_A900") || m.includes("ASA_C800")) {
     return { cluster: ["e1a", "e1b"], storage: ["e2a", "e2b"], management: "e0M", data: ["e3a", "e3b"] };
-  } else if (m.includes("A70") || m.includes("A50") || m.includes("C60") || m.includes("ASA_A70") || m.includes("ASA_A50") || m.includes("ASA_C60") || m.includes("A400") || m.includes("C400") || m.includes("ASA_A400") || m.includes("ASA_C400") || m.includes("FAS9500")) {
+  } else if (m.includes("A70") || m.includes("A50") || m.includes("C60") || m.includes("ASA_A70") || m.includes("ASA_A50") || m.includes("ASA_C60") || m.includes("A400") || m.includes("C400") || m.includes("ASA_A400") || m.includes("ASA_C400") || m.includes("FAS9500") || m.includes("FAS90") || m.includes("FAS70")) {
     return { cluster: ["e0a", "e0b"], storage: ["e0c", "e0d"], management: "e0M", data: ["e0e", "e0f"] };
   } else if (m.includes("FAS")) {
     return { cluster: ["e0a", "e0b"], storage: ["0a", "0b"], management: "e0M", data: ["e0c", "e0d"] };
@@ -4814,7 +4814,7 @@ function renderSgBucketTable() {
   tbody.innerHTML = "";
 
   state.sgBuckets.forEach((bucket, index) => {
-    if (state.version !== "12.0") {
+    if (!state.version.startsWith("12.")) {
       bucket.bucketBranches = false;
     }
     const tr = document.createElement("tr");
@@ -6814,7 +6814,7 @@ function generateStoragegridCliCode() {
       // Event notifications
       if (bucket.eventNotifications) {
         if (versionNum >= 120) {
-          code += `  # S3 Event Notifications (StorageGRID 12.0 Webhook integration)\n`;
+          code += `  # S3 Event Notifications (StorageGRID 12.x Webhook integration)\n`;
           code += `  aws s3api put-bucket-notification-configuration --bucket ${bucket.name} --notification-configuration '{\n`;
           code += `    "QueueConfigurations": [\n`;
           code += `      {\n`;
@@ -6838,9 +6838,9 @@ function generateStoragegridCliCode() {
         }
       }
 
-      // Bucket Branches (StorageGRID 12.0+)
+      // Bucket Branches (StorageGRID 12.x+)
       if (versionNum >= 120 && bucket.bucketBranches) {
-        code += `  # StorageGRID 12.0 Bucket Branches (Space-efficient dataset point-in-time copy)\n`;
+        code += `  # StorageGRID 12.x Bucket Branches (Space-efficient dataset point-in-time copy)\n`;
         code += `  curl -X POST "$S3_ENDPOINT/${bucket.name}/?branch" \\\n`;
         code += `    -H "Authorization: AWS $AWS_ACCESS_KEY_ID:$AWS_SECRET_ACCESS_KEY" \\\n`;
         code += `    -d '{\n`;
@@ -6914,10 +6914,10 @@ function generateStoragegridCliCode() {
   code += `    "tlsPolicy": "${tlsComp}"\n`;
   code += `  }'\n`;
 
-  // StorageGRID 12.0+ Specific Features (Assume Role & Caching Layer)
+  // StorageGRID 12.x+ Specific Features (Assume Role & Caching Layer)
   if (versionNum >= 120) {
     if (state.sgIntegrations.assumeRole) {
-      code += `\n# 9. GRID ADMIN (StorageGRID 12.0+): Configure short-term IAM Assume Role (STS)\n`;
+      code += `\n# 9. GRID ADMIN (StorageGRID 12.x+): Configure short-term IAM Assume Role (STS)\n`;
       code += `curl -X POST "https://grid-manager.company.com/api/${apiVer}/grid/iam-roles" \\\n`;
       code += `  -H "accept: application/json" -H "Content-Type: application/json" \\\n`;
       code += `  -H "Authorization: Bearer $GRID_ADMIN_TOKEN" \\\n`;
@@ -6933,7 +6933,7 @@ function generateStoragegridCliCode() {
       code += `  }'\n`;
     }
     if (state.sgIntegrations.s3Caching) {
-      code += `\n# 10. GRID ADMIN (StorageGRID 12.0+): Enable high-performance S3 Caching Layer for AI/ML\n`;
+      code += `\n# 10. GRID ADMIN (StorageGRID 12.x+): Enable high-performance S3 Caching Layer for AI/ML\n`;
       code += `curl -X PUT "https://grid-manager.company.com/api/${apiVer}/grid/s3-caching" \\\n`;
       code += `  -H "accept: application/json" -H "Content-Type: application/json" \\\n`;
       code += `  -H "Authorization: Bearer $GRID_ADMIN_TOKEN" \\\n`;
@@ -7875,7 +7875,7 @@ function generateDeploymentGuide() {
     md += `- **Multi-Tenancy Isolation**: StorageGRID isolates S3 client namespaces via Tenant accounts. Each tenant gets dedicated local accounts, API keys, and bucket quotas, guaranteeing strict multi-tenant segregation.\n`;
     md += `- **Data Protection & Compliance**: Enabling S3 Object Lock enforces write-once-read-many (WORM) compliance. S3 Versioning ensures file history is preserved and provides defense against ransomware.\n`;
     md += `- **S3 Platform Services**: Event Notifications (SNS/Webhooks) trigger serverless actions; CloudMirror replicates objects to AWS S3 or other storage hosts for disaster recovery; Metadata Search (Elasticsearch) updates external search indexes automatically on write.\n`;
-    if (state.version === "12.0") {
+    if (state.version.startsWith("12.")) {
       md += `- **Advanced Dataset Copying (Bucket Branches)**: Enables creation of space-efficient point-in-time read-only or read-write bucket clones for isolated AI/ML experiments without duplicating physical storage.\n`;
       if (state.sgIntegrations.s3Caching) {
         md += `- **S3 Caching Layer**: Active caching is configured to accelerate high-throughput read/write transfers for AI/ML dataset ingestion.\n`;
@@ -9178,8 +9178,8 @@ function syncUIWithState() {
     document.getElementById("sgSearchIntegration").checked = state.sgIntegrations.searchIntegration;
     document.getElementById("sgTlsCompliance").value = state.sgIntegrations.tlsCompliance;
     
-    // Sync StorageGRID 12.0+ checkboxes
-    const isSg12 = (state.platform === "storagegrid" && state.version === "12.0");
+    // Sync StorageGRID 12.x+ checkboxes
+    const isSg12 = (state.platform === "storagegrid" && state.version.startsWith("12."));
     const cachingInput = document.getElementById("sgS3Caching");
     const cachingCard = document.getElementById("sgS3CachingCard");
     const assumeRoleInput = document.getElementById("sgAssumeRole");
@@ -9867,9 +9867,9 @@ function generatePresalesProposalMarkdown() {
     md += `### Advanced Security & Compliance\n`;
     md += `* **TLS Profile:** Strict adherence to \`${state.sgIntegrations.tlsCompliance.toUpperCase()}\` encryption.\n`;
     md += `* **Key Management (KMS):** Cryptographic lock using \`${state.sgIntegrations.kmsProvider.toUpperCase()}\` system controls.\n`;
-    if (state.version === "12.0") {
+    if (state.version.startsWith("12.")) {
       md += `* **Security Access (STS):** Short-term IAM credentials enabled via AssumeRole: ${state.sgIntegrations.assumeRole ? "Active" : "Inactive"}.\n`;
-      md += `\n### StorageGRID 12.0 Premium AI & Data Services\n`;
+      md += `\n### StorageGRID 12.x Premium AI & Data Services\n`;
       md += `* **S3 Caching Layer Acceleration:** ${state.sgIntegrations.s3Caching ? "Enabled (Optimized cache for high-throughput AI workloads)" : "Disabled"}.\n`;
       const hasBranches = state.sgBuckets.some(b => b.bucketBranches);
       md += `* **Bucket Branches (Point-in-Time Clones):** ${hasBranches ? "Configured on active buckets for dataset isolation" : "Available (Supported in v12.0)"}.\n`;
@@ -10373,8 +10373,8 @@ function renderArchitectureGuide() {
     html += '  <h3>Compliance and Data Durability</h3>';
     html += '  <p><strong>S3 Object Lock (WORM):</strong> Bucket retention prevents objects from being overwritten, deleted, or modified during the configured preservation duration. This satisfies regulatory security audits and prevents ransomware encryption.</p>';
     html += '  <p><strong>Platform Services Integration:</strong> Asynchronously triggers events (SNS/Webhooks), mirror copies (CloudMirror), or custom metadata search indexes (Elasticsearch) on ingest, extending S3 storage to serverless cloud tasks.</p>';
-    if (state.version === "12.0") {
-      html += '  <h3>StorageGRID 12.0 High-Performance AI Features</h3>';
+    if (state.version.startsWith("12.")) {
+      html += '  <h3>StorageGRID 12.x High-Performance AI Features</h3>';
       html += '  <p><strong>Point-in-Time Bucket Branches:</strong> Allows developers to instantly spin up space-efficient, read-write dataset clones. This enables rapid AI iteration and testing on copy-on-write datasets without duplicating storage.</p>';
       if (state.sgIntegrations.s3Caching) {
         html += '  <p><strong>S3 Caching Layer Enabled:</strong> Accelerates high-performance computing (HPC) and AI model training workloads by caching active datasets at near-line rate speed.</p>';
