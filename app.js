@@ -1,4 +1,4 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.0)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.1)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -4402,6 +4402,31 @@ function getControllerPorts(model) {
   }
 }
 
+// Real per-switch-model cluster port numbering, shared by generateCablingRows() (cabling
+// table/diagrams) and generateSwitchConfig() (Switch CLI tab) so both agree. Sourced from
+// NetApp's real RCF port banners -- see DATA_SOURCES.md's "Cluster Switch Reference Data".
+// nodeIndex is 1-based (node 1 gets the first cluster-port pair, etc.).
+function getClusterSwitchPortLabel(model, nodeIndex) {
+  if (model === "Nexus9336CFX2") {
+    // RCF banner: Eth1/1-6 breakout (legacy low-speed), Eth1/7-34 node ports, Eth1/35-36 ISL
+    return `Eth1/${6 + nodeIndex}`;
+  } else if (model === "BES53248") {
+    // Node ports run 0/1 up to 0/54; ISL is 0/55-0/56
+    return `0/${nodeIndex}`;
+  } else if (model === "SN2100") {
+    return `swp${nodeIndex}`;
+  }
+  // Nexus3132QV (default) -- confirmed ISL at Eth1/31-32, node ports start at Eth1/1
+  return `Eth1/${nodeIndex}`;
+}
+
+function getClusterSwitchIslLabel(model) {
+  if (model === "Nexus9336CFX2") return "Eth1/35-36";
+  if (model === "BES53248") return "0/55-0/56";
+  if (model === "SN2100") return "swp31-32";
+  return "Eth1/31-32"; // Nexus3132QV
+}
+
 function generateCablingRows() {
   const isSg = state.platform === "storagegrid";
   const model = state.sizing.controller;
@@ -4450,14 +4475,16 @@ function generateCablingRows() {
       if (halfNodes > 1) {
         // Site A cluster switch cabling
         for (let i = 1; i <= halfNodes; i++) {
-          rows.push({ src: getNodeName(i), srcPort: ports.cluster[0], dest: `${switchAName} 1 (Site A)`, destPort: `Port ${i}`, type: "Cluster Interconnect (Fabric A)" });
-          rows.push({ src: getNodeName(i), srcPort: ports.cluster[1], dest: `${switchBName} 1 (Site A)`, destPort: `Port ${i}`, type: "Cluster Interconnect (Fabric B)" });
+          const portLabel = getClusterSwitchPortLabel(activeSwitchModel, i);
+          rows.push({ src: getNodeName(i), srcPort: ports.cluster[0], dest: `${switchAName} 1 (Site A)`, destPort: portLabel, type: "Cluster Interconnect (Fabric A)" });
+          rows.push({ src: getNodeName(i), srcPort: ports.cluster[1], dest: `${switchBName} 1 (Site A)`, destPort: portLabel, type: "Cluster Interconnect (Fabric B)" });
         }
         // Site B cluster switch cabling
         for (let i = halfNodes + 1; i <= nodeCount; i++) {
           const portNum = i - halfNodes;
-          rows.push({ src: getNodeName(i), srcPort: ports.cluster[0], dest: `${switchAName} 2 (Site B)`, destPort: `Port ${portNum}`, type: "Cluster Interconnect (Fabric A)" });
-          rows.push({ src: getNodeName(i), srcPort: ports.cluster[1], dest: `${switchBName} 2 (Site B)`, destPort: `Port ${portNum}`, type: "Cluster Interconnect (Fabric B)" });
+          const portLabel = getClusterSwitchPortLabel(activeSwitchModel, portNum);
+          rows.push({ src: getNodeName(i), srcPort: ports.cluster[0], dest: `${switchAName} 2 (Site B)`, destPort: portLabel, type: "Cluster Interconnect (Fabric A)" });
+          rows.push({ src: getNodeName(i), srcPort: ports.cluster[1], dest: `${switchBName} 2 (Site B)`, destPort: portLabel, type: "Cluster Interconnect (Fabric B)" });
         }
       } else {
         // 2-node MetroCluster IP/FC (shared switches)
@@ -4581,8 +4608,9 @@ function generateCablingRows() {
         // Switched cluster cabling is mandatory if nodeCount > 2
         const activeSwitchModel = nodeCount > 2 ? (switchModel || "BES53248") : switchModel;
         for (let i = 1; i <= nodeCount; i++) {
-          rows.push({ src: getNodeName(i), srcPort: ports.cluster[0], dest: `${switchAName} (${activeSwitchModel})`, destPort: `Port ${i}`, type: "Cluster Interconnect (Fabric A)" });
-          rows.push({ src: getNodeName(i), srcPort: ports.cluster[1], dest: `${switchBName} (${activeSwitchModel})`, destPort: `Port ${i}`, type: "Cluster Interconnect (Fabric B)" });
+          const portLabel = getClusterSwitchPortLabel(activeSwitchModel, i);
+          rows.push({ src: getNodeName(i), srcPort: ports.cluster[0], dest: `${switchAName} (${activeSwitchModel})`, destPort: portLabel, type: "Cluster Interconnect (Fabric A)" });
+          rows.push({ src: getNodeName(i), srcPort: ports.cluster[1], dest: `${switchBName} (${activeSwitchModel})`, destPort: portLabel, type: "Cluster Interconnect (Fabric B)" });
         }
       }
 

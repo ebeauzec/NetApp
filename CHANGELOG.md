@@ -2,6 +2,11 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.7.1] - 2026-08-14
+
+### Fixed
+- **Cabling Table/Diagram Still Used Generic Port Numbers**: v1.7.0 fixed the Switch CLI tab's cluster port numbering but missed a second, separate code path -- `generateCablingRows()` (the Step 6 "Dynamic Port Cabling Matrix" table, `cabling_topology.txt`, and MetroCluster per-site cabling) still numbered every cluster switch's node ports starting at Port 1 regardless of the selected switch model. A Nexus 9336C-FX2 switched cluster showed cluster1-01/02 on "Port 1"/"Port 2" instead of the real `Eth1/7`/`Eth1/8` (ports 1-6 on that switch are reserved for legacy breakout, per its RCF banner). Extracted the per-model port numbering into a shared `getClusterSwitchPortLabel()` used by both the cabling table and the Switch CLI generator, so they can no longer drift apart.
+
 ## [1.7.0] - 2026-08-14
 
 ### Added
