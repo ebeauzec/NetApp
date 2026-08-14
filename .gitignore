@@ -7,3 +7,8 @@ extract_working.py
 inspect_offline.py
 tmp_extract/
 
+data/netapp_docs_raw/
+data/netapp_docs_manifest.json
+tools/__pycache__/
+.claude/
+
