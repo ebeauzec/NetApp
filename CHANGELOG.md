@@ -2,6 +2,17 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.7.0] - 2026-08-14
+
+### Added
+- **Cisco Nexus 9336C-FX2 Cluster Switch**: Added as a selectable cluster switch model (shared cluster/storage switch, ONTAP 9.9.1+) alongside the existing Nexus 3132Q-V, NVIDIA SN2100, and NetApp BES-53248 options.
+
+### Fixed
+- **Cluster Switch Config Was Generic Regardless of Selected Model**: `generateSwitchConfig()`'s cluster interconnect section ignored the selected `clusterSwitchModel` entirely and always emitted the same fabricated RCF filename/version and port range no matter which switch was chosen. Now branches per model with real, sourced NX-OS/EFOS versions, RCF filenames, and ISL port assignments (see `DATA_SOURCES.md`'s new "Cluster Switch Reference Data" section) -- e.g. selecting Nexus 9336C-FX2 now correctly shows NX-OS 10.4(2)F, RCF v1.9, and ISL on Eth1/35-36, instead of the 3132Q-V's Eth1/31-32 being shown regardless of the switch actually selected.
+- **Switch Config Used Wrong Cluster Port Names Per Platform**: The port-mapping table hardcoded `e0a`/`e0b` for every controller regardless of platform, so an AFF/ASA A90 switched cluster showed the wrong ports. Now sourced from the same `getControllerPorts()` catalog the cabling diagram uses (e.g. A90 correctly shows `e1a`/`e7a`).
+- **Fabricated MetroCluster IP RCF Filename**: NetApp generates MetroCluster IP RCFs per-deployment via their RcfFileGenerator tool, not as a static download; the generator invented a fixed filename instead. Now points to the real tool and marks the port table as illustrative pending that tool's output.
+- **NX-OS Version List Used the Wrong Format**: `CISCO_VERSIONS` used a dotted format ("9.3.9") that doesn't match how Cisco actually publishes NX-OS releases ("9.3(13)", "10.4(2)F"); `versionToNum()` also couldn't parse the real format (would silently return `NaN` and disable the modern-syntax code paths gated on it). Fixed the version list and made `versionToNum()` parse the real format correctly.
+
 ## [1.6.0] - 2026-08-14
 
 ### Added

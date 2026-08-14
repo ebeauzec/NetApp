@@ -1,16 +1,25 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.6.0)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.0)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
 const ONTAP_VERSIONS = ["9.19.1", "9.18.1", "9.17.1", "9.16.1", "9.15.1", "9.14.1", "9.13.1", "9.12.1", "9.11.1", "9.10.1", "9.9.1", "9.8.0", "9.7.0"];
 const STORAGEGRID_VERSIONS = ["12.1", "12.0", "11.9", "11.8", "11.7", "11.6", "11.5"];
-const CISCO_VERSIONS = ["9.3.9", "9.2.2", "8.4.2"];
+// NX-OS versions use Cisco's real parenthetical release notation, not dotted "9.3.9"-style
+// strings. 10.4(2)F is the 9336C-FX2's current NetApp-qualified release; 9.3(13) is the
+// 3132Q-V's (per NetAppModeler's already-sourced firmware_baselines -- see DATA_SOURCES.md).
+const CISCO_VERSIONS = ["10.4(2)F", "10.3(4a)M", "9.3(13)", "9.3(12)", "9.3(11)"];
 const BROCADE_VERSIONS = ["9.2.0", "9.1.0", "9.0.1", "8.2.3"];
 
 // Implement versionToNum as specified in prompt
 function versionToNum(vStr) {
   if (!vStr) return 0;
-  const parts = vStr.split('.').map(Number);
+  // Leading-digit-run parse (not plain Number()) so real Cisco NX-OS release strings like
+  // "10.4(2)F" or "10.3(4a)M" parse correctly (major=10, minor=4) instead of NaN -- ONTAP's
+  // plain numeric "9.19.1"-style versions are unaffected since Number("19") === leading-run("19").
+  const parts = vStr.split('.').map(p => {
+    const m = p.match(/^\d+/);
+    return m ? parseInt(m[0], 10) : 0;
+  });
   const major = parts[0] || 0;
   const minor = parts[1] || 0;
   return major * 100 + minor;
@@ -7540,48 +7549,85 @@ function generateSwitchConfig() {
     code += `# =========================================================================\n\n`;
 
     // 1. CLUSTER INTERCONNECT SWITCHES
+    // Real per-model RCF filename/version, NX-OS/EFOS version, and ISL port assignments --
+    // sourced from NetApp's official switch install/RCF guides (github.com/NetAppDocs/
+    // ontap-systems-switches) and NetAppModeler's already-verified firmware_baselines
+    // (see DATA_SOURCES.md's "Cluster Switch Reference Data" section). Both switches in a
+    // pair (cs1/cs2) run an identical RCF; a node's two cluster ports land on the SAME
+    // physical port number on each of the two switches, not two different ports on one switch.
     code += `# =========================================================================\n`;
     code += `# SECTION 1: CLUSTER INTERCONNECT SWITCH CONFIGURATION\n`;
     code += `# =========================================================================\n`;
-    if (brand === "cisco") {
-      code += `# Target Switch: Cisco Nexus 3132Q-V or Cisco Nexus 9336C-FX2 (Cluster Switch)\n`;
-      code += `# RCF File Pattern: NX3132_v1.80_Cluster_${nodeCount}Node.rcf\n\n`;
-      code += `# 1A. Download Reference Configuration File (RCF) via SFTP:\n`;
-      code += `copy sftp://admin@${state.network.mgmtIp || "192.168.1.50"}/rcf/NX3132_v1.80_Cluster_${nodeCount}Node.rcf bootflash:NX3132.rcf\n\n`;
-      code += `# 1B. Apply RCF File and Save to Startup Config:\n`;
-      code += `copy bootflash:NX3132.rcf running-config\n`;
+    const clusterModel = state.sizing.clusterSwitchModel || "Nexus3132QV";
+    const clusterPorts = getControllerPorts(state.sizing.controller);
+    if (clusterModel === "Nexus9336CFX2") {
+      code += `# Target Switch: Cisco Nexus 9336C-FX2 / 9336C-FX2-T (cs1/cs2) -- shared cluster/storage switch, ONTAP 9.9.1+\n`;
+      code += `# NX-OS Version (NetApp-qualified, current): 10.4(2)F\n`;
+      code += `# RCF File: Nexus_9336C_RCF_v1.9-Cluster-HA-Breakout.txt\n`;
+      code += `# Confirm the exact NX-OS/RCF pairing for your ONTAP release on NetApp's Switch Compatibility Table (mysupport.netapp.com) before deployment.\n\n`;
+      code += `# 1A. Download Reference Configuration File (RCF) via SFTP (repeat on cs1 and cs2):\n`;
+      code += `copy sftp://admin@${state.network.mgmtIp || "192.168.1.50"}/rcf/Nexus_9336C_RCF_v1.9-Cluster-HA-Breakout.txt bootflash: vrf management\n\n`;
+      code += `# 1B. Apply RCF and Save to Startup Config:\n`;
+      code += `copy Nexus_9336C_RCF_v1.9-Cluster-HA-Breakout.txt running-config echo-commands\n`;
       code += `copy running-config startup-config\n\n`;
-      code += `# 1C. Port Allocation & Settings Matrix:\n`;
-      code += `# Port Range       | Connected To                    | Mode        | Speed   | MTU   | VLAN\n`;
-      code += `# -----------------|---------------------------------|-------------|---------|-------|------\n`;
+      code += `# 1C. Port Allocation Matrix (per RCF banner -- identical port numbers on cs1 and cs2):\n`;
+      code += `# Port(s)   | Usage                                    | Speed      | MTU   | VLAN\n`;
+      code += `# ----------|------------------------------------------|------------|-------|------\n`;
+      code += `# Eth1/1-6  | Breakout 4x10G/25G (legacy low-speed)     | 10/25 Gb   | 9000  | 3700\n`;
       for (let i = 1; i <= nodeCount; i++) {
         const nodeName = state.customNodeNames[i - 1] || `cluster1-0${i}`;
-        code += `# Ethernet 1/${i}      | Node ${nodeName} (port e0a)      | Trunk/Clust | 100 Gb  | 9000  | 3700\n`;
-        code += `# Ethernet 1/${i + 16}     | Node ${nodeName} (port e0b)      | Trunk/Clust | 100 Gb  | 9000  | 3700\n`;
+        code += `# Eth1/${6 + i}     | Node ${nodeName} (port ${clusterPorts.cluster[0]} -> cs1, ${clusterPorts.cluster[1]} -> cs2) | 40/100 Gb  | 9000  | 3700\n`;
       }
-      code += `# Ethernet 1/31-32 | Inter-Switch Link (ISL Peer)    | LACP Trunk  | 100 Gb  | 9000  | 3700\n\n`;
-    } else if (brand === "brocade") {
-      code += `# Target Switch: Broadcom BES-53248 Cluster Interconnect Switch\n`;
-      code += `# RCF File Pattern: BES-53248_v1.30_Cluster.scr\n\n`;
-      code += `# 1A. Download RCF Script from TFTP server:\n`;
-      code += `copy tftp://${state.network.mgmtIp || "192.168.1.50"}/BES-53248_v1.30_Cluster.scr nvram:script\n\n`;
+      code += `# Eth1/35-36| Intra-Cluster ISL (Po1, LACP)              | 40/100 Gb  | 9000  | 3700\n\n`;
+    } else if (clusterModel === "SN2100") {
+      code += `# Target Switch: NVIDIA SN2100 (cs1/cs2) -- Cumulus Linux, ONTAP 9.10.1P3+\n`;
+      code += `# This switch runs Cumulus Linux (NVUE/\`net\` command syntax), not NX-OS/EFOS --\n`;
+      code += `# the CLI commands generated for Cisco/Broadcom switches below do not apply to it.\n`;
+      code += `# Follow NetApp's official SN2100 cluster switch install/RCF guide directly:\n`;
+      code += `# https://docs.netapp.com/us-en/ontap-systems-switches/switch-nvidia-sn2100/\n`;
+      code += `# Port Allocation (per platform, identical port numbers on cs1 and cs2):\n`;
+      for (let i = 1; i <= nodeCount; i++) {
+        const nodeName = state.customNodeNames[i - 1] || `cluster1-0${i}`;
+        code += `# swp${i} -> Node ${nodeName} (port ${clusterPorts.cluster[0]} -> cs1, ${clusterPorts.cluster[1]} -> cs2)\n`;
+      }
+      code += `\n`;
+    } else if (clusterModel === "BES53248") {
+      code += `# Target Switch: NetApp BES-53248 (cs1/cs2)\n`;
+      code += `# EFOS Version (NetApp-qualified, current): 3.10.0.3\n`;
+      code += `# RCF File: BES-53248_RCF_v1.9-Cluster-HA.txt\n`;
+      code += `# Confirm the exact EFOS/RCF pairing for your ONTAP release on NetApp's Switch Compatibility Table (mysupport.netapp.com) before deployment.\n\n`;
+      code += `# 1A. Download RCF Script via TFTP (repeat on cs1 and cs2):\n`;
+      code += `copy tftp://${state.network.mgmtIp || "192.168.1.50"}/BES-53248_RCF_v1.9-Cluster-HA.txt nvram:reference-config\n\n`;
       code += `# 1B. Apply RCF Script and Write Memory:\n`;
-      code += `script apply BES-53248_v1.30_Cluster.scr\n`;
+      code += `script apply BES-53248_RCF_v1.9-Cluster-HA.txt\n`;
       code += `write memory\n\n`;
-      code += `# 1C. Port Allocation & Settings Matrix:\n`;
-      code += `# Port Range       | Connected To                    | Mode        | Speed   | MTU   | VLAN\n`;
-      code += `# -----------------|---------------------------------|-------------|---------|-------|------\n`;
+      code += `# 1C. Port Allocation Matrix (identical port numbers on cs1 and cs2):\n`;
+      code += `# Port(s)   | Usage                                    | Speed      | MTU   | VLAN\n`;
+      code += `# ----------|------------------------------------------|------------|-------|------\n`;
       for (let i = 1; i <= nodeCount; i++) {
         const nodeName = state.customNodeNames[i - 1] || `cluster1-0${i}`;
-        code += `# Port 1/${i}          | Node ${nodeName} (port e0a)      | Trunk/Clust | 25 Gb   | 9000  | 3700\n`;
-        code += `# Port 1/${i + 24}     | Node ${nodeName} (port e0b)      | Trunk/Clust | 25 Gb   | 9000  | 3700\n`;
+        code += `# 0/${i}      | Node ${nodeName} (port ${clusterPorts.cluster[0]} -> cs1, ${clusterPorts.cluster[1]} -> cs2) | 40/100 Gb  | 9000  | 3700\n`;
       }
-      code += `# Port 1/49-52     | Inter-Switch Link (ISL Peer)    | LACP Trunk  | 100 Gb  | 9000  | 3700\n\n`;
+      code += `# 0/55-0/56 | Cluster-ISL (Po1, LACP)                    | 100 Gb     | 9000  | 3700\n\n`;
     } else {
-      code += `# Switch Brand set to Generic. Configure cluster switches manually:\n`;
-      code += `# - Create Cluster VLAN 3700\n`;
-      code += `# - Enable MTU 9000 (Jumbo Frames) on all ports\n`;
-      code += `# - Map Node Cluster ports (e0a, e0b) to switch access ports in VLAN 3700\n\n`;
+      // Nexus3132QV (default) or an unrecognized model string
+      code += `# Target Switch: Cisco Nexus 3132Q-V (cs1/cs2)\n`;
+      code += `# NX-OS Version (NetApp-qualified, current): 9.3(13)\n`;
+      code += `# RCF File: Nexus_3132QV_RCF_v1.7-Cluster.txt\n`;
+      code += `# Confirm the exact NX-OS/RCF pairing for your ONTAP release on NetApp's Switch Compatibility Table (mysupport.netapp.com) before deployment.\n\n`;
+      code += `# 1A. Download Reference Configuration File (RCF) via SFTP (repeat on cs1 and cs2):\n`;
+      code += `copy sftp://admin@${state.network.mgmtIp || "192.168.1.50"}/rcf/Nexus_3132QV_RCF_v1.7-Cluster.txt bootflash: vrf management\n\n`;
+      code += `# 1B. Apply RCF and Save to Startup Config:\n`;
+      code += `copy Nexus_3132QV_RCF_v1.7-Cluster.txt running-config echo-commands\n`;
+      code += `copy running-config startup-config\n\n`;
+      code += `# 1C. Port Allocation Matrix (identical port numbers on cs1 and cs2):\n`;
+      code += `# Port(s)   | Usage                                    | Speed      | MTU   | VLAN\n`;
+      code += `# ----------|------------------------------------------|------------|-------|------\n`;
+      for (let i = 1; i <= nodeCount; i++) {
+        const nodeName = state.customNodeNames[i - 1] || `cluster1-0${i}`;
+        code += `# Eth1/${i}    | Node ${nodeName} (port ${clusterPorts.cluster[0]} -> cs1, ${clusterPorts.cluster[1]} -> cs2) | 40/100 Gb  | 9000  | 3700\n`;
+      }
+      code += `# Eth1/31-32| Inter-Switch Link (Po1, LACP)              | 40/100 Gb  | 9000  | 3700\n\n`;
     }
 
     // 2. METROCLUSTER SWITCHES
@@ -7593,13 +7639,15 @@ function generateSwitchConfig() {
         code += `# MetroCluster Type: METROCLUSTER IP (Synchronous Ethernet Replication)\n`;
         if (brand === "cisco") {
           code += `# Target Switch Hardware: Cisco Nexus 9336C-FX2 (MetroCluster Switch)\n`;
-          code += `# RCF File Pattern: N9K_9336C_MetroCluster_IP_v1.8.rcf\n\n`;
-          code += `# 2A. Download MetroCluster RCF File via SFTP:\n`;
-          code += `copy sftp://admin@${state.network.mgmtIp || "192.168.1.50"}/rcf/N9K_9336C_MetroCluster_IP_v1.8.rcf bootflash:MC_IP.rcf\n\n`;
-          code += `# 2B. Apply RCF Configuration Script:\n`;
-          code += `copy bootflash:MC_IP.rcf running-config\n`;
+          code += `# NX-OS Version (NetApp-qualified, current): 10.4(2)F\n`;
+          code += `# RCF: MetroCluster IP RCFs are per-deployment generated files, not a fixed download --\n`;
+          code += `# use NetApp's RcfFileGenerator tool: https://mysupport.netapp.com/site/tools/tool-eula/rcffilegenerator\n`;
+          code += `# (requires the MetroCluster port group and node platform; see the tool's port tables).\n\n`;
+          code += `# 2A. Copy the generated RCF to the switch bootflash, then apply it:\n`;
+          code += `copy sftp://admin@${state.network.mgmtIp || "192.168.1.50"}/rcf/<generated-mcc-ip-rcf>.txt bootflash: vrf management\n`;
+          code += `copy <generated-mcc-ip-rcf>.txt running-config echo-commands\n`;
           code += `copy running-config startup-config\n\n`;
-          code += `# 2C. Switch Port Configuration & Mode Matrix:\n`;
+          code += `# 2B. Switch Port Configuration & Mode Matrix (illustrative -- verify against the RcfFileGenerator's port tables for your exact node platform and MetroCluster port group):\n`;
           code += `# Port Range       | Connected To                    | Mode        | Speed   | MTU   | VLANs / Description\n`;
           code += `# -----------------|---------------------------------|-------------|---------|-------|--------------------\n`;
           code += `# Ethernet 1/1-2   | Node 1 (port e5a, e5b)          | Access/TR   | 25 Gb   | 9000  | VLAN 10 (Fabric A) / VLAN 20 (Fabric B)\n`;
@@ -7607,20 +7655,22 @@ function generateSwitchConfig() {
           code += `# Ethernet 1/17-20 | Local NS224 NVMe Storage Shelf  | Access      | 100 Gb  | 9000  | VLAN 100 (Internal Storage Loop)\n`;
           code += `# Ethernet 1/35-36 | Inter-Site ISLs (to Remote Sw)  | LACP Trunk  | 100 Gb  | 9000  | VLANs 10, 20 (MetroCluster Peering)\n\n`;
         } else if (brand === "brocade") {
-          code += `# Target Switch Hardware: Broadcom BES-53248 (MetroCluster IP Switch)\n`;
-          code += `# RCF File Pattern: BES-53248_v1.40_MetroCluster_IP.scr\n\n`;
-          code += `# 2A. Download RCF Script from TFTP server:\n`;
-          code += `copy tftp://${state.network.mgmtIp || "192.168.1.50"}/BES-53248_v1.40_MetroCluster_IP.scr nvram:script\n\n`;
-          code += `# 2B. Apply RCF Script and Write Memory:\n`;
-          code += `script apply BES-53248_v1.40_MetroCluster_IP.scr\n`;
+          code += `# Target Switch Hardware: NetApp BES-53248 (MetroCluster IP Switch)\n`;
+          code += `# EFOS Version (NetApp-qualified, current): 3.10.0.3\n`;
+          code += `# RCF: MetroCluster IP RCFs are per-deployment generated files, not a fixed download --\n`;
+          code += `# use NetApp's RcfFileGenerator tool: https://mysupport.netapp.com/site/tools/tool-eula/rcffilegenerator\n`;
+          code += `# (requires the MetroCluster port group and node platform; see the tool's port tables).\n\n`;
+          code += `# 2A. Copy the generated RCF to the switch, then apply it:\n`;
+          code += `copy tftp://${state.network.mgmtIp || "192.168.1.50"}/<generated-mcc-ip-rcf>.txt nvram:reference-config\n`;
+          code += `script apply <generated-mcc-ip-rcf>.txt\n`;
           code += `write memory\n\n`;
-          code += `# 2C. Switch Port Configuration & Mode Matrix:\n`;
+          code += `# 2B. Switch Port Configuration & Mode Matrix (illustrative -- verify against the RcfFileGenerator's port tables for your exact node platform and MetroCluster port group):\n`;
           code += `# Port Range       | Connected To                    | Mode        | Speed   | MTU   | VLANs / Description\n`;
           code += `# -----------------|---------------------------------|-------------|---------|-------|--------------------\n`;
-          code += `# Port 1/1-2       | Node 1 (port e5a, e5b)          | Access/TR   | 25 Gb   | 9000  | VLAN 10 (Fabric A) / VLAN 20 (Fabric B)\n`;
-          code += `# Port 1/3-4       | Node 2 (port e5a, e5b)          | Access/TR   | 25 Gb   | 9000  | VLAN 10 (Fabric A) / VLAN 20 (Fabric B)\n`;
-          code += `# Port 1/17-20     | Local Storage Shelf             | Access      | 10 Gb   | 9000  | VLAN 100 (Internal Storage Loop)\n`;
-          code += `# Port 1/49-52     | Inter-Site ISLs (to Remote Sw)  | LACP Trunk  | 100 Gb  | 9000  | VLANs 10, 20 (MetroCluster Peering)\n\n`;
+          code += `# 0/1-2            | Node 1 (port e5a, e5b)          | Access/TR   | 25 Gb   | 9000  | VLAN 10 (Fabric A) / VLAN 20 (Fabric B)\n`;
+          code += `# 0/3-4            | Node 2 (port e5a, e5b)          | Access/TR   | 25 Gb   | 9000  | VLAN 10 (Fabric A) / VLAN 20 (Fabric B)\n`;
+          code += `# 0/17-20          | Local Storage Shelf             | Access      | 10 Gb   | 9000  | VLAN 100 (Internal Storage Loop)\n`;
+          code += `# 0/55-0/56        | Inter-Site ISLs (to Remote Sw)  | LACP Trunk  | 100 Gb  | 9000  | VLANs 10, 20 (MetroCluster Peering)\n\n`;
         } else {
           code += `# Generic Switch configuration for MetroCluster IP:\n`;
           code += `# - Configure MTU 9000 (Jumbo Frames) on all ports.\n`;
@@ -11185,6 +11235,7 @@ function generateSvgPhysicalCabling() {
 
   let switchName = switchModel;
   if (switchModel === "Nexus3132QV") switchName = "Cisco Nexus 3132Q-V";
+  else if (switchModel === "Nexus9336CFX2") switchName = "Cisco Nexus 9336C-FX2";
   else if (switchModel === "SN2100") switchName = "NVIDIA SN2100";
   else if (switchModel === "BES53248") switchName = "NetApp BES-53248";
 
@@ -12341,7 +12392,14 @@ function generateBillOfMaterials() {
   // Switches
   if (state.platform === "ontap") {
     if (state.sizing.clusterCabling === "switched") {
-      bom += `| **Cluster Switch** | High-Speed Cluster Interconnect Switch | Cisco Nexus 9336C-FX2 | 2 | Redundant cluster interconnect switches. |\n`;
+      const switchLabels = {
+        Nexus3132QV: "Cisco Nexus 3132Q-V",
+        Nexus9336CFX2: "Cisco Nexus 9336C-FX2",
+        SN2100: "NVIDIA SN2100",
+        BES53248: "NetApp BES-53248"
+      };
+      const switchLabel = switchLabels[state.sizing.clusterSwitchModel] || switchLabels.Nexus3132QV;
+      bom += `| **Cluster Switch** | High-Speed Cluster Interconnect Switch | ${switchLabel} | 2 | Redundant cluster interconnect switches (cs1/cs2). |\n`;
     }
     const hasSan = state.protocols && state.protocols.some(p => ["iscsi", "fc", "fcoe", "nvme_tcp", "nvme_fc"].includes(p));
     if (hasSan && state.network.zoningEnable) {
