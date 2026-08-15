@@ -6,6 +6,43 @@ The application is built entirely as a client-side front-end app (HTML, CSS, and
 
 ---
 
+## 🚀 What's New in v1.8.1
+
+A full correctness audit spanning v1.7.0–v1.8.1, prompted by real-bundle testing and a
+request to find any remaining hidden issues and make the tool physically incapable of
+producing an unsupported configuration. Full details and sources for every item below are in
+`CHANGELOG.md` and `DATA_SOURCES.md`.
+
+*   **Hard Caps on Unsupported Configurations**: The Step 1 **Disk Count** and **Node Count**
+    dropdowns now only offer values your selected platform and protocol can actually support --
+    it's no longer possible to select more shelves, disks, or cluster nodes than NetApp's own
+    documentation allows. Backed by real per-platform NS224/SAS shelf limits sourced from
+    NetApp's hot-add cabling guides and Knowledge Base, and by ONTAP's real 12-node (SAN) /
+    24-node (NAS) cluster limit.
+*   **(Critical) Aggregates Were Only Ever Created on the First HA Pair**: The generated ONTAP
+    CLI and Ansible playbook enabled storage ports on every node but created aggregates on only
+    the first two -- an 8-node cluster left 6 nodes completely unprovisioned. Both generators
+    now correctly loop over every HA pair.
+*   **Capacity Calculator Fixed for Multi-Pair Clusters**: The usable/logical capacity math
+    assumed exactly 2 aggregates cluster-wide regardless of node count, understating parity
+    overhead (and overstating usable capacity) for any cluster with more than one HA pair.
+    Usable capacity now scales correctly and linearly per HA pair.
+*   **Shelf Provisioning Is Now Automatic and Per-HA-Pair-Correct**: `Disks per Node Pair` is
+    exactly what it says -- every HA pair (and MetroCluster site) is now automatically
+    provisioned its own full, correctly-numbered set of shelves, with no double-counting or
+    silent oversubscription. The cabling diagrams, Switch CLI, cluster port numbers, and PCIe
+    storage expansion adapters (with real part numbers) are all generated to match.
+*   **Cabling Diagrams and Switch Configs Use Real Sourced Data**: Cluster switch NX-OS/EFOS
+    versions, RCF files, ISL ports, and node port numbers are now specific to the selected
+    switch model (Cisco Nexus 3132Q-V / 9336C-FX2, NVIDIA SN2100, NetApp BES-53248) instead of
+    generic placeholders, and physical cabling diagrams no longer draw every node's cable
+    converging on a single point on the destination switch.
+*   **Dozens of Smaller Correctness Fixes**: DS212C shelf counts, BOM part numbers for ASA/FAS
+    platforms, LUN-size unit mismatches, expansion-card PCIe slot collisions with real cluster
+    ports, and more. See `CHANGELOG.md` for the complete list.
+
+---
+
 ## 🚀 What's New in v1.6.0
 
 *   **"Check for Updates" Button**: Checks whether `ONTAP_VERSIONS` / `STORAGEGRID_VERSIONS` are still current against live sources (endoflife.date, docs.netapp.com). Talks only to a local helper you start yourself -- the app never reaches the internet on its own. See [Checking for Updates](#-checking-for-updates) below.
