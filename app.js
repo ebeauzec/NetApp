@@ -1,4 +1,4 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.5)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.6)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -4308,6 +4308,7 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
   result.portPairs.push(onboardPorts);
 
   // Define slot priorities per model
+  let slotPriority = [1, 2, 3, 4];
   if (m.includes("A1K") || m.includes("ASA_A1K")) {
     slotPriority = [5, 7, 9, 11];
   } else if (m.includes("A90") || m.includes("C80") || m.includes("ASA_A90") || m.includes("ASA_C80")) {
@@ -4329,6 +4330,22 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
   } else if (m.includes("FAS2750")) {
     slotPriority = [1];
   }
+
+  // Never propose an expansion-card slot number that's already wired to this platform's
+  // cluster, onboard storage, data, or management ports (getControllerPorts()) -- e.g. an
+  // A90's cluster interconnect already occupies slots 1 and 7 (e1a/e7a), so an expansion
+  // card can't also claim slot 1 without producing the same "e1a" port label twice for two
+  // different physical roles. slotPriority arrays above were defined independently of the
+  // sourced controller port catalog and were never cross-checked against it; this closes
+  // that gap. See CHANGELOG.md for the platforms this actually changes capacity for.
+  const controllerPorts = getControllerPorts(model);
+  const occupiedSlots = new Set();
+  [].concat(controllerPorts.cluster, controllerPorts.storage, controllerPorts.data, controllerPorts.management)
+    .forEach(p => {
+      const slotMatch = /^e(\d+)/.exec(p || "");
+      if (slotMatch) occupiedSlots.add(parseInt(slotMatch[1], 10));
+    });
+  slotPriority = slotPriority.filter(s => !occupiedSlots.has(s));
 
   result.slotsAvailable = slotPriority.length;
   // Every expansion slot adds one more stack (stackSize shelves) of direct-attach capacity

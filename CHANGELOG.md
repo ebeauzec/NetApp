@@ -2,6 +2,11 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.7.6] - 2026-08-15
+
+### Fixed
+- **Storage Expansion Card Slot Numbers Collided With Real Cluster/Data Ports**: `getExpansionCardsAndPorts()`'s per-platform `slotPriority` arrays (which PCIe slot to place the 1st/2nd/... storage expansion card in) were defined independently of the sourced controller port catalog in `getControllerPorts()`, and were never cross-checked against it. For the A1K/A90/A70/C80 family, whose cluster interconnect already occupies PCIe slots 1 and 7 (`e1a`/`e7a`), the expansion-card logic proposed slot 1 for the *first* storage card too -- rendering the literal label `e1a` twice in the same node's port row, once as the cluster port and once as a storage-adapter port, which is physically impossible (one slot, two roles). A900/C800/A400/C400/A1K also had smaller, less visible versions of the same collision. Expansion-card slots are now filtered against every port number already in use by that platform's cluster, onboard storage, data, and management ports, so no slot is ever proposed twice for two different roles. This also slightly reduces the real PCIe expansion capacity (and therefore `maxDirectAttachShelves`, see v1.7.4) for the affected platforms, since some of their previously-listed "available" slots were never actually free. Also fixed a regression from v1.7.4 where the `slotPriority` variable's `let` declaration was accidentally dropped, which would throw or silently reuse a stale value from a prior call for any unrecognized controller model.
+
 ## [1.7.5] - 2026-08-15
 
 ### Fixed

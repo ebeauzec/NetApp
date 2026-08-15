@@ -147,6 +147,13 @@ slot count; within it, the correct adapter is silently placed into the BOM/
 CLI/cabling diagrams with no warning needed. See `CHANGELOG.md`'s v1.7.4
 entry.
 
+Expansion-card slot numbers are filtered against every slot already used by
+that platform's cluster/storage/data/management ports (`getControllerPorts()`)
+before being offered to `slotPriority`, so a card is never placed in a slot
+that's already wired for another role (e.g. AFF/ASA A90's cluster occupies
+slots 1 and 7 -- an expansion card can no longer be proposed for slot 1). See
+`CHANGELOG.md`'s v1.7.6 entry.
+
 ## What this deliberately does NOT check
 
 **Hardware platform additions** (new AFF/ASA/FAS/StorageGRID appliance
