@@ -3118,7 +3118,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.9.1</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.9.2</span>
       </div>
     </header>
 
@@ -4983,7 +4983,7 @@ lucide.createIcons({icons});\``);if(typeof c>"u")throw new Error("`createIcons()
   <!-- App scripts -->
 
   <script>
-// NetApp Enterprise Configurator & Code Generator Engine (v1.9.1)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.9.2)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -13693,12 +13693,18 @@ function validateForm() {
       const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
       const shelfCardSizing = getExpansionCardsAndPorts(state.sizing.controller, state.sizing.shelfType, shelfCount);
       if (shelfCardSizing.overflow) {
+        // shelfCount/maxDirectAttachShelves here are external-shelf-only (see getShelfCount()) --
+        // the real total disk-count ceiling this platform supports also includes any internal
+        // bays (getInternalBayCount()), which are consumed first and don't need a shelf at all.
+        const internalBaysForMsg = getInternalBayCount(state.sizing.controller) || 0;
+        const realDiskMax = internalBaysForMsg + shelfCardSizing.maxDirectAttachShelves * getShelfBayCount(state.sizing.shelfType);
+        const internalNote = internalBaysForMsg > 0 ? ` (including ${internalBaysForMsg} disks that need no shelf at all)` : "";
         errors.push({
           step: 7,
           title: "Shelf Count Exceeds Direct-Attach Capacity",
-          msg: `${state.sizing.shelfType} Shelves (${shelfCount} per HA pair): ${state.sizing.controller} can direct-attach at most ${shelfCardSizing.maxDirectAttachShelves} ${state.sizing.shelfType} shelves per HA pair (1 onboard stack plus ${shelfCardSizing.slotsAvailable} PCIe expansion slot(s)).`,
+          msg: `${state.sizing.shelfType} Shelves (${shelfCount} external, beyond ${internalBaysForMsg} internal disks per HA pair): ${state.sizing.controller} can direct-attach at most ${shelfCardSizing.maxDirectAttachShelves} external ${state.sizing.shelfType} shelves per HA pair (1 onboard stack plus ${shelfCardSizing.slotsAvailable} PCIe expansion slot(s)).`,
           why: `Each expansion card adds one more storage stack of capacity, but ${state.sizing.controller} only has ${shelfCardSizing.slotsAvailable} usable slot(s) for this -- there's no physical slot left to cable the remaining shelves directly.`,
-          fix: `Reduce Disk Count on Step 1 to ${shelfCardSizing.maxDirectAttachShelves * getShelfBayCount(state.sizing.shelfType)} or fewer disks per node pair, or use a storage switch fabric topology to scale beyond onboard/PCIe direct-attach limits.`
+          fix: `Reduce Disk Count on Step 1 to ${realDiskMax} or fewer disks per node pair${internalNote}, or use a storage switch fabric topology to scale beyond onboard/PCIe direct-attach limits.`
         });
       }
 

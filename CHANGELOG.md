@@ -2,6 +2,17 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.9.2] - 2026-08-15
+
+### Fixed
+- **Shelf-Overflow Error Message Ignored Internal Bays**: The "Shelf Count Exceeds
+  Direct-Attach Capacity" validation error (a defense-in-depth backstop for out-of-range disk
+  counts, e.g. from an imported config) told the user to reduce Disk Count to the platform's
+  *external-shelf-only* maximum, silently ignoring any real internal bays -- e.g. an AFF A90
+  (48 internal bays + 2 external shelves) with an out-of-range disk count was told to reduce to
+  48, when the real combined maximum is 96. The message now reports the true combined
+  internal+external ceiling and clarifies how many of those disks need no shelf at all.
+
 ## [1.9.1] - 2026-08-15
 
 ### Fixed
