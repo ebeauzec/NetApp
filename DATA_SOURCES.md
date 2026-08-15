@@ -134,6 +134,19 @@ prior bug this corrected (a `shelfCount / numPairs` division at 12 call
 sites that re-divided an already-per-pair value, undersizing every cluster
 with more than one HA pair).
 
+`getExpansionCardsAndPorts()` auto-selects and places the PCIe storage
+expansion adapter(s) each HA pair needs once its per-pair `shelfCount`
+exceeds what the onboard storage ports alone can stack (1 stack of 2 NS224
+shelves, or 4 SAS shelves). It uses each platform's real expansion-slot
+count (`slotPriority`, sourced alongside the rest of the Controller Port
+Catalog above) to compute a true `maxDirectAttachShelves` limit per platform
+-- e.g. AFF A150's single mezzanine slot supports up to 4 NS224 shelves per
+HA pair, not a one-size-fits-all "2 shelves" rule. `validateForm()` only
+raises an error when a configuration genuinely exceeds that platform's real
+slot count; within it, the correct adapter is silently placed into the BOM/
+CLI/cabling diagrams with no warning needed. See `CHANGELOG.md`'s v1.7.4
+entry.
+
 ## What this deliberately does NOT check
 
 **Hardware platform additions** (new AFF/ASA/FAS/StorageGRID appliance

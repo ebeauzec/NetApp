@@ -2,6 +2,11 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.7.4] - 2026-08-15
+
+### Fixed
+- **"High Shelf Count for Direct Cabling" Warned Regardless of Platform, and the BOM/Docs Line It Pointed To Was Blank**: The warning fired on a blanket ">2 NS224 shelves" rule for every platform, telling the user to "verify you have enough onboard or adapter ports" themselves -- even though `getExpansionCardsAndPorts()` already auto-selects and places the correct PCIe expansion adapter(s) into the BOM, CLI, and cabling diagrams for exactly this situation. That auto-provisioning was itself broken: it returned `{cardModel, slot, ports}`, but the Bill of Materials and HLD/LLD documentation generators read `card.partNumber` / `card.description` -- fields that never existed -- so the "Storage PCIe Expansion Card" BOM line rendered with a blank description and part number. Fixed the field mismatch (`getExpansionCardsAndPorts()` now returns real `partNumber`/`description`, e.g. `X1148A` / "2-Port 100GbE RoCE QSFP28 NVMe Storage HBA"), and replaced the generic warning with a real per-platform capacity check: each platform's actual PCIe expansion-slot count (already tracked internally as `slotPriority`) now determines the true maximum direct-attach shelf count (e.g. AFF A150's single mezzanine slot supports up to 4 NS224 shelves per HA pair, not the previous blanket "2"). Configurations within that real limit no longer show any warning at all -- the correct adapter is auto-placed and shown in the BOM/CLI, nothing for the user to act on. Configurations that genuinely exceed the platform's physical slot count now raise an actionable error naming the exact shelf/disk-count limit and recommending a switched storage fabric, instead of the previous vague "verify" message -- and the function no longer fabricates slot numbers beyond what a platform actually has when a configuration does overflow.
+
 ## [1.7.3] - 2026-08-15
 
 ### Fixed

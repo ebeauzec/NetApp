@@ -3118,7 +3118,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.3</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.4</span>
       </div>
     </header>
 
@@ -4966,7 +4966,7 @@ lucide.createIcons({icons});\``);if(typeof c>"u")throw new Error("`createIcons()
   <!-- App scripts -->
 
   <script>
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.3)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.4)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -9262,18 +9262,20 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
 
   const result = {
     cards: [],
-    portPairs: []
+    portPairs: [],
+    // Real per-platform PCIe slot capacity -- see slotPriority below. Used to detect
+    // when a configuration needs more expansion cards than the platform physically has
+    // (see validateForm()'s "High Shelf Count for Direct Cabling" check).
+    slotsAvailable: 0,
+    slotsUsed: 0,
+    overflow: false,
+    maxDirectAttachShelves: 0
   };
 
   const onboardPorts = getControllerPorts(model).storage;
   result.portPairs.push(onboardPorts);
 
-  if (cardsNeeded <= 0) {
-    return result;
-  }
-
   // Define slot priorities per model
-  let slotPriority = [1, 2, 3, 4];
   if (m.includes("A1K") || m.includes("ASA_A1K")) {
     slotPriority = [5, 7, 9, 11];
   } else if (m.includes("A90") || m.includes("C80") || m.includes("ASA_A90") || m.includes("ASA_C80")) {
@@ -9296,20 +9298,40 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
     slotPriority = [1];
   }
 
-  for (let c = 0; c < cardsNeeded; c++) {
-    const slot = slotPriority[c] || (slotPriority[slotPriority.length - 1] + c);
-    let cardModel = "";
+  result.slotsAvailable = slotPriority.length;
+  // Every expansion slot adds one more stack (stackSize shelves) of direct-attach capacity
+  // beyond the single onboard stack every platform has.
+  result.maxDirectAttachShelves = stackSize * (slotPriority.length + 1);
+
+  if (cardsNeeded <= 0) {
+    return result;
+  }
+
+  // Never invent a slot number beyond what this platform actually has -- a config that
+  // needs more cards than physical slots is a real overflow (flagged via result.overflow),
+  // not something to paper over with a fabricated slot number.
+  result.overflow = cardsNeeded > slotPriority.length;
+  const cardsToPlace = Math.min(cardsNeeded, slotPriority.length);
+  result.slotsUsed = cardsToPlace;
+
+  const cardModel = isNvme ? "X1148A" : "X1144A";
+  const cardDescription = isNvme
+    ? "2-Port 100GbE RoCE QSFP28 NVMe Storage HBA"
+    : "4-Port 12Gb SAS HBA";
+
+  for (let c = 0; c < cardsToPlace; c++) {
+    const slot = slotPriority[c];
     let ports = [];
     if (isNvme) {
-      cardModel = "X1148A"; // 2-port 100GbE RoCE QSFP28
       ports = [`e${slot}a`, `e${slot}b`];
     } else {
-      cardModel = "X1144A"; // 4-port 12Gb SAS HBA
       ports = [`${slot}a`, `${slot}b`]; // We only need 2 ports for a stack pair
     }
 
     result.cards.push({
       cardModel: cardModel,
+      partNumber: cardModel,
+      description: cardDescription,
       slot: slot,
       ports: ports
     });
@@ -13321,15 +13343,21 @@ function validateForm() {
         });
       }
 
-      // Cabling shelf counts checks [NEW]
+      // Cabling shelf counts checks -- driven by the real per-platform PCIe expansion-slot
+      // capacity in getExpansionCardsAndPorts() instead of a blanket ">2 shelves" rule. When
+      // the configuration fits, the needed adapters are auto-provisioned into the BOM/CLI/
+      // cabling diagrams already (see that function) and there's nothing for the user to fix.
+      // Only a true overflow -- more shelves than the platform has expansion slots for -- is
+      // flagged, since that's physically impossible to direct-attach cable.
       const shelfCount = Math.ceil(state.sizing.diskCount / 24);
-      if (state.sizing.shelfType === "NS224" && shelfCount > 2) {
-        warnings.push({
+      const shelfCardSizing = getExpansionCardsAndPorts(state.sizing.controller, state.sizing.shelfType, shelfCount);
+      if (shelfCardSizing.overflow) {
+        errors.push({
           step: 7,
-          title: "High Shelf Count for Direct Cabling",
-          msg: `NS224 Shelves (${shelfCount}): Direct cabling more than 2 NS224 shelves requires additional PCIe NVMe expansion adapters.`,
-          why: "Standard controller cards have limited ports. For configurations exceeding 2 shelves, switched storage fabric is recommended.",
-          fix: "Verify you have enough onboard or adapter ports, or consider using a storage switch fabric."
+          title: "Shelf Count Exceeds Direct-Attach Capacity",
+          msg: `${state.sizing.shelfType} Shelves (${shelfCount} per HA pair): ${state.sizing.controller} can direct-attach at most ${shelfCardSizing.maxDirectAttachShelves} ${state.sizing.shelfType} shelves per HA pair (1 onboard stack plus ${shelfCardSizing.slotsAvailable} PCIe expansion slot(s)).`,
+          why: `Each expansion card adds one more storage stack of capacity, but ${state.sizing.controller} only has ${shelfCardSizing.slotsAvailable} usable slot(s) for this -- there's no physical slot left to cable the remaining shelves directly.`,
+          fix: `Reduce Disk Count on Step 1 to ${shelfCardSizing.maxDirectAttachShelves * 24} or fewer disks per node pair, or use a storage switch fabric topology to scale beyond onboard/PCIe direct-attach limits.`
         });
       }
 
