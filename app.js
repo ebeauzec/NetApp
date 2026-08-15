@@ -1,4 +1,4 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.9.0)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.9.1)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -3909,9 +3909,12 @@ function solveDiskCountForUsableCapacity(targetUsableGb) {
   const spareDisks = state.sizing.spareDisks;
   const shelfType = state.sizing.shelfType;
 
+  // Internal bays (if any) are free capacity consumed first; an external shelf type's real
+  // max is internal + external combined (see getShelfCount()/updateDiskCountRange()), not
+  // external alone.
   const maxDisks = shelfType === "Internal"
     ? (getInternalBayCount(state.sizing.controller) || 24)
-    : (getExpansionCardsAndPorts(state.sizing.controller, shelfType, 1).maxDirectAttachShelves * getShelfBayCount(shelfType));
+    : ((getInternalBayCount(state.sizing.controller) || 0) + getExpansionCardsAndPorts(state.sizing.controller, shelfType, 1).maxDirectAttachShelves * getShelfBayCount(shelfType));
 
   for (let diskCount = 12; diskCount <= maxDisks; diskCount += 12) {
     const totalDisks = diskCount * numPairs;
@@ -4355,9 +4358,13 @@ function updateDiskCountRange() {
       // cable, so a configuration exceeding the platform's real shelf capacity can never be
       // selected in the first place (see getExpansionCardsAndPorts()/DATA_SOURCES.md for the
       // sourced per-platform limits). shelfCount passed here is a placeholder -- the cap only
-      // depends on controller + shelf type, not the disk count being validated.
+      // depends on controller + shelf type, not the disk count being validated. Platforms with
+      // real internal bays (getInternalBayCount()) get those added on top -- internal capacity
+      // is free/automatic and only the overflow needs this external shelf type (see
+      // getShelfCount()), so the combined max is internal + external, not external alone.
       const cardSizing = getExpansionCardsAndPorts(state.sizing.controller, shelf, 1);
-      const maxDisksForPlatform = cardSizing.maxDirectAttachShelves * getShelfBayCount(shelf);
+      const internalBaysForCap = getInternalBayCount(state.sizing.controller) || 0;
+      const maxDisksForPlatform = internalBaysForCap + cardSizing.maxDirectAttachShelves * getShelfBayCount(shelf);
       maxAllowed = maxDisksForPlatform;
       const cappedOptions = options.filter(v => v <= maxDisksForPlatform);
       options = cappedOptions.length > 0 ? cappedOptions : [Math.min(...options)];
@@ -4470,15 +4477,23 @@ function getShelfBayCount(shelfType) {
   return shelfType === "DS212C" ? 12 : 24;
 }
 
-// Real internal drive bay count for platforms whose disks sit directly in the controller
-// chassis (no separate NSM shelf module or shelf-to-controller cabling at all) -- sourced from
-// NetApp's published platform specification pages/datasheets. Returns null for platforms not
-// confirmed to have true internal bays, in which case the app requires at least one real
-// external shelf (existing behavior, unchanged). Deliberately excludes platforms whose "base"
-// storage is a separate-but-bundled shelf enclosure with real NSM cabling (A70/A90/C80, A1K,
-// A900, C800) -- those are already correctly modeled as needing Shelf 1 via
-// getRealMaxNs224Shelves(), and are architecturally different from a true internal-bay design.
-// See DATA_SOURCES.md.
+// Real internal drive bay count for platforms whose base storage capacity doesn't require
+// configuring/cabling a separately-purchased external shelf -- sourced from NetApp's published
+// platform specification pages/datasheets. Returns null for platforms not confirmed to have
+// this, in which case the app requires at least one real external shelf (existing behavior,
+// unchanged).
+//
+// A70/A90/C80 are included on the strength of NetApp's own hot-add documentation, which
+// explicitly states the baseline HA pair "has only internal storage (no external shelves)"
+// before any hot-add procedure begins (github.com/NetAppDocs/ontap-systems/_include/
+// cable-70-90-hot-add-shelf.adoc), corroborated by a 48-internal-SSD-slot 4U chassis spec.
+// A1K is included the same way: its base storage is a 2RU x 24-slot storage chassis that ships
+// bundled with the 2RU controller as one purchasable unit, at the same treatment as every other
+// platform in this table -- a real, separate NSM/shelf-cabling relationship still exists
+// underneath the bundling (its own hot-add doc calls the baseline "1 existing NS224 shelf"),
+// but for consistency with the rest of this table it's modeled as available without configuring
+// an additional external shelf. A900 and C800 remain excluded: no bundled-chassis or "internal
+// storage" language was found for either in available sources. See DATA_SOURCES.md.
 function getInternalBayCount(model) {
   const m = (model || "").toUpperCase();
   if (m.includes("A150")) return 24;
@@ -4487,6 +4502,11 @@ function getInternalBayCount(model) {
   if (m.includes("A20")) return 24;
   if (m.includes("A30") || m.includes("C30")) return 24;
   if (m.includes("A50") || m.includes("C60")) return 24;
+  // "A900" contains "A90" and "C800" contains "C80" as substrings -- excluded explicitly so
+  // they fall through to `return null` instead of incorrectly matching this branch (same
+  // precaution as getControllerPorts()/getRealMaxNs224Shelves() apply for the same pair).
+  if ((m.includes("A90") && !m.includes("A900")) || m.includes("A70") || (m.includes("C80") && !m.includes("C800"))) return 48;
+  if (m.includes("A1K")) return 24;
   if (m.includes("FAS2820") || m.includes("FAS2750")) return 12;
   return null;
 }
@@ -4494,12 +4514,19 @@ function getInternalBayCount(model) {
 // Total shelf count for a given disk count and shelf type/platform. Returns 0 for the
 // "Internal" pseudo-shelf-type (see getInternalBayCount()) -- callers that loop
 // "for (s = 1; s <= shelfCount; s++)" to draw/cable/list shelves correctly do nothing at all
-// for an internal-only configuration, with no further special-casing needed. Otherwise
-// identical to the previous inline Math.max(1, Math.ceil(diskCount / getShelfBayCount(...)))
-// pattern used throughout the app.
-function getShelfCount(diskCount, shelfType) {
+// for an internal-only configuration, with no further special-casing needed.
+//
+// For an external shelf type (NS224/DS224C/DS212C) on a platform that also has real internal
+// bays (getInternalBayCount()), those internal bays are free capacity consumed first -- only
+// the overflow beyond them needs an external shelf at all. Without this, a platform with e.g.
+// 48 internal bays selecting NS224 with diskCount=60 would shelve all 60 disks (3 shelves)
+// instead of correctly shelving just the 12 that don't fit internally (1 shelf).
+function getShelfCount(diskCount, shelfType, model) {
   if (shelfType === "Internal") return 0;
-  return Math.max(1, Math.ceil(diskCount / getShelfBayCount(shelfType)));
+  const internalBays = getInternalBayCount(model) || 0;
+  const externalDisks = Math.max(0, diskCount - internalBays);
+  if (externalDisks <= 0) return 0;
+  return Math.max(1, Math.ceil(externalDisks / getShelfBayCount(shelfType)));
 }
 
 // Real NS224 maximum total shelves per HA pair (1 onboard/base + hot-add capacity), sourced
@@ -4733,7 +4760,7 @@ function generateCablingRows() {
   const nodeCount = parseInt(state.sizing.nodeCount) || 2;
   const clusterCabling = state.sizing.clusterCabling;
   const switchModel = state.sizing.clusterSwitchModel;
-  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
   const ports = getControllerPorts(model);
   const proto = state.protocol;
 
@@ -4974,7 +5001,7 @@ function updateCablingPlanner() {
   const clusterCabling = state.sizing.clusterCabling;
   const switchModel = state.sizing.clusterSwitchModel;
   const ports = getControllerPorts(model);
-  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
 
   const isSg = state.platform === "storagegrid";
   const cablingMatrixContainer = document.querySelector("#stepPanel3 .cabling-matrix-container");
@@ -6604,7 +6631,7 @@ function generateOntapCliCode() {
     code += `# Enable storage interfaces for NS224 NVMe RoCE or SAS shelves\n`;
     const model = state.sizing.controller;
     const shelfType = state.sizing.shelfType;
-    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
     
     // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
     // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
@@ -8678,7 +8705,7 @@ function validateForm() {
       // cabling diagrams already (see that function) and there's nothing for the user to fix.
       // Only a true overflow -- more shelves than the platform has expansion slots for -- is
       // flagged, since that's physically impossible to direct-attach cable.
-      const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+      const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
       const shelfCardSizing = getExpansionCardsAndPorts(state.sizing.controller, state.sizing.shelfType, shelfCount);
       if (shelfCardSizing.overflow) {
         errors.push({
@@ -10991,7 +11018,7 @@ function generateSvgPhysicalCabling() {
   const clusterCabling = state.sizing.clusterCabling;
   const switchModel = state.sizing.clusterSwitchModel;
   const shelfType = state.sizing.shelfType;
-  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
   const ports = getControllerPorts(model);
   const proto = state.protocol;
 
@@ -11112,7 +11139,7 @@ function generateSvgPhysicalCabling() {
     const isIp = mcc.type === "ip";
     const mediatorType = mcc.mediator === "mediator" ? "ONTAP Mediator" : (mcc.mediator === "tiebreaker" ? "Tiebreaker Node" : "None");
     const shelfType = state.sizing.shelfType;
-    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
     const hasFabricPool = state.ontapFabricPool && state.ontapFabricPool.enabled;
     
     const scale = parseInt(mcc.scale) || 4;
@@ -11777,7 +11804,7 @@ function generateSvgStorageOnlyCabling() {
   const model = state.sizing.controller;
   const nodeCount = parseInt(state.sizing.nodeCount) || 2;
   const shelfType = state.sizing.shelfType;
-  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+  const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
   const ports = getControllerPorts(model);
 
   const switchAName = (state.customSwitchNames && state.customSwitchNames.switchA) || "Switch-A";
@@ -12122,7 +12149,7 @@ function generateSvgTopology() {
     const isIp = mcc.type === "ip";
     const mediatorType = mcc.mediator === "mediator" ? "ONTAP Mediator" : (mcc.mediator === "tiebreaker" ? "Tiebreaker Node" : "None");
     const shelfType = state.sizing.shelfType;
-    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
     
     const scale = parseInt(mcc.scale) || 4;
     const halfNodes = scale / 2;
@@ -12717,7 +12744,12 @@ function generateBillOfMaterials() {
   // Shelves
   if (!isSg || state.sizing.shelfType !== "virtual") {
     let shelfQty = 0;
-    if (state.sizing.shelfType === "NS224" || state.sizing.shelfType === "DS224C") {
+    if (!isSg && (state.sizing.shelfType === "NS224" || state.sizing.shelfType === "DS224C" || state.sizing.shelfType === "DS212C")) {
+      // ONTAP: route through getShelfCount() so the BOM agrees with the cabling/CLI/docs
+      // generators, including internal-bay platforms where the first N disks per pair need
+      // no external shelf at all (see getInternalBayCount()).
+      shelfQty = getShelfCount(diskCount, state.sizing.shelfType, state.sizing.controller) * (nodeCount / 2);
+    } else if (state.sizing.shelfType === "NS224" || state.sizing.shelfType === "DS224C") {
       shelfQty = Math.ceil(diskCount / 24) * (isSg ? nodeCount : nodeCount / 2);
     } else if (state.sizing.shelfType === "DS212C") {
       shelfQty = Math.ceil(diskCount / 12) * (isSg ? nodeCount : nodeCount / 2);
@@ -12751,7 +12783,7 @@ function generateBillOfMaterials() {
   if (!isSg) {
     const model = state.sizing.controller;
     const shelfType = state.sizing.shelfType;
-    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
     
     // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
     // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
@@ -13444,7 +13476,7 @@ function generateHldLldDesign() {
     
     const model = state.sizing.controller;
     const shelfType = state.sizing.shelfType;
-    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType);
+    const shelfCount = getShelfCount(state.sizing.diskCount, state.sizing.shelfType, state.sizing.controller);
     const nodeCount = parseInt(state.sizing.nodeCount);
     
     // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already

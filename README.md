@@ -6,6 +6,30 @@ The application is built entirely as a client-side front-end app (HTML, CSS, and
 
 ---
 
+## 🚀 What's New in v1.9.0
+
+*   **"Internal (No External Shelf)" Drive Shelf Option**: Platforms whose disks are built
+    directly into the controller chassis -- AFF/ASA A150, A250/C250, A400/C400, A20, A30/C30,
+    A50/C60, and FAS2820/FAS2750 -- now offer "Internal" as a Drive Shelf Type choice alongside
+    NS224/DS224C/DS212C. Selecting it produces zero external shelves throughout: no shelf boxes
+    in the cabling diagrams, no shelf cabling rows, no shelf/PCIe-card BOM line items, and Disks
+    per Node Pair is capped at that platform's real internal bay count instead of a
+    shelf-stacking limit. See `DATA_SOURCES.md` for sourced bay counts per platform.
+*   **"Target Usable Capacity" Sizing Input**: An optional Step 1 field that reverse-solves the
+    minimum Disks per Node Pair needed to reach a target cluster-wide usable capacity (GB or
+    TB), given the current controller/shelf/disk-size/RAID/spare settings -- size from "I need
+    50TB usable" directly instead of iterating on disk count by hand. Automatically re-solves if
+    a dependent field changes, and clearly flags when a target isn't achievable on the current
+    platform/shelf choice.
+*   **Controller Switching Now Actually Re-Caps Disk Count**: Found and fixed two gaps in the
+    v1.8.0/v1.8.1 hard-cap work while wiring the above: switching the Controller dropdown never
+    re-triggered the shelf/disk-count option rebuild at all, and where the rebuild did run, a
+    "preserve unmatched values" fallback was silently keeping a stale, now-unsupported disk
+    count selected (e.g. an AFF A1K's 96 disks/pair surviving a switch to an AFF A150's 24-disk
+    real maximum). Both fixed.
+
+---
+
 ## 🚀 What's New in v1.8.1
 
 A full correctness audit spanning v1.7.0–v1.8.1, prompted by real-bundle testing and a

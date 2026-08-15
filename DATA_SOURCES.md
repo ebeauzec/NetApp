@@ -225,17 +225,51 @@ NAS nodes, versus a smaller platform-specific ceiling) -- no single public
 source enumerating this per platform was found; Hardware Universe is the
 authoritative source and remains login-gated.
 
-### Real internal drive bay counts (v1.9.0)
+### Real internal drive bay counts (v1.9.0, corrected v1.9.1 twice)
 
-`getInternalBayCount()` returns the number of disk bays built directly into
-the controller chassis for platforms where this is genuine (no separate NSM
-shelf module, no shelf-to-controller cabling at all for that base capacity)
--- distinct from platforms whose "first shelf" is a real, separately-cabled
-NS224 enclosure that just happens to be bundled/co-packaged (AFF/ASA
-A70/A90/C80, A1K, A900, C800 -- these are deliberately **excluded** and
-still require selecting an external shelf type, consistent with the real
-`getRealMaxNs224Shelves()` table above, which already treats their base
-unit as consuming "Shelf 1").
+**Internal capacity is always consumed first.** Selecting an *external*
+shelf type (NS224/DS224C/DS212C) on a platform with real internal bays does
+not shelve the whole disk count -- `getShelfCount()` subtracts
+`getInternalBayCount()` before computing how many external shelves are
+needed for the remainder. An AFF A90 (48 internal bays) configured with 60
+disks and NS224 selected needs exactly 1 external shelf for the 12 disks
+beyond its internal capacity, not `ceil(60/24) = 3`. This applies uniformly
+across cabling, CLI, BOM, documentation, SVG diagrams, the disk-count
+dropdown's hard cap (internal + external combined), and the capacity
+solver's achievable range. Selecting "Internal" explicitly instead of an
+external shelf type still hard-caps at internal bays alone, for users who
+want a guarantee that no external shelf will ever be proposed.
+
+`getInternalBayCount()` returns the number of disk bays available to a
+platform without configuring/cabling a separately-purchased external shelf,
+for platforms confirmed to have this. A70/A90/C80 are included on the
+strength of NetApp's own hot-add documentation: it states the baseline HA
+pair "has only internal storage (no external shelves)" before any hot-add
+procedure begins
+(`github.com/NetAppDocs/ontap-systems/_include/cable-70-90-hot-add-shelf.adoc`),
+corroborated by an independent vendor spec citing a 48-internal-SSD-slot 4U
+chassis. This does not contradict `getRealMaxNs224Shelves()`'s existing
+"A70/A90/C80: 2" figure above -- that number is for *additional, external*
+shelves hot-added beyond this internal baseline, a separate, additive
+capacity layer, not the same thing measured twice.
+
+A1K is included the same way, at user request, for consistency with every
+other platform in this table: its base storage is a 2RU x 24-slot storage
+chassis that ships bundled with the 2RU controller as one purchasable unit
+and doesn't require separately configuring/cabling an *additional* shelf to
+reach that first 24 disks. Note this is a **weaker-evidence inclusion** than
+A70/90/C80's: A1K's own hot-add doc calls its baseline "1 existing NS224
+shelf" (not "internal storage"), implying a real, separate NSM/shelf-cabling
+relationship still exists underneath the bundling -- unlike A70/90/C80,
+where NetApp's own wording draws no such distinction. `getRealMaxNs224Shelves()`'s
+existing "A1K: 4" figure (1 existing + 3 hot-add) is unaffected by this
+change; it still represents A1K's real total external-shelf-equivalent
+capacity ceiling.
+
+A900 and C800 remain **excluded**: no bundled-chassis or "internal storage"
+language was found for either in available sources, and their hot-add docs
+use the same "existing shelf" phrasing as A1K without an accompanying
+bundled-chassis data point to justify an inclusion the way A1K got.
 
 | Platform | Internal bays | Source |
 |---|---|---|
@@ -245,6 +279,8 @@ unit as consuming "Shelf 1").
 | AFF/ASA A20 | 24 | Vendor spec summary: "2U chassis with 24 internal SSD slots" |
 | AFF/ASA A30, C30 | 24 | Vendor spec summary (2U variant; a 4U/48-bay variant is mentioned for some SKUs but not modeled here -- see note below) |
 | AFF/ASA A50, C60 | 24 | Same source and caveat as A30/C30 |
+| AFF/ASA A90, A70, C80 | 48 | `_include/cable-70-90-hot-add-shelf.adoc`'s "only internal storage (no external shelves)" baseline language + vendor spec's "4U chassis with 48 internal SSD slots" |
+| AFF/ASA A1K | 24 | Vendor spec summary: "2RU controller and 2RU x 24-slot storage drive chassis" (bundled-chassis inclusion, weaker evidence -- see note above) |
 | FAS2820, FAS2750 | 12 | Vendor spec summary: "2U chassis with 12 drive slots... maximum number of internal drives is 12" |
 
 **Lower-confidence note**: A30/A50 (and their C-series equivalents) are
@@ -255,13 +291,11 @@ specific SKU/configuration corresponds to which bay count. A user who knows
 their specific A30/A50/C30/C60 is the 48-bay variant can still reach that
 capacity by selecting an external shelf type instead of "Internal".
 
-**Not researched**: A70/A90/A1K/A900/C80/C800's exact internal-vs-bundled-shelf
-architecture was ambiguous in available sources (one search described A70/A90
-as having "48 internal SSD slots" in an integrated 4U chassis, which would
-argue for inclusion here) -- deliberately left out of `getInternalBayCount()`
-rather than risk contradicting the already-verified `getRealMaxNs224Shelves()`
-figures for the same platforms, which model their base capacity as a real,
-separately-cabled NS224 shelf.
+**Not researched**: A900 and C800's exact internal-vs-bundled-shelf
+architecture -- their hot-add docs use "existing shelf" language rather
+than A70/90/C80's explicit "internal storage" phrasing, and unlike A1K, no
+bundled-chassis spec data point was found to justify including them anyway.
+Left excluded from `getInternalBayCount()` rather than guessed at.
 
 ## What this deliberately does NOT check
 

@@ -2,6 +2,36 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.9.1] - 2026-08-15
+
+### Fixed
+- **AFF/ASA A70, A90, C80, and A1K Were Missing the "Internal" Shelf Option**: v1.9.0's
+  internal-bay research found ambiguous evidence for these platforms and left them out to avoid
+  contradicting the existing external-shelf table. On review, NetApp's own hot-add documentation
+  explicitly states A70/A90/C80's baseline HA pair "has only internal storage (no external
+  shelves)" before any hot-add procedure begins, corroborated independently by a
+  48-internal-SSD-slot 4U chassis spec -- strong enough evidence to include them (now 48 bays).
+  A1K is also now included (24 bays, its bundled 2RU x 24-slot storage chassis), applied for
+  consistency with the rest of the table at explicit user request -- its own hot-add doc calls
+  the baseline "1 existing NS224 shelf" rather than "internal storage", a meaningfully weaker
+  evidentiary basis than A70/90/C80's, documented as such in `DATA_SOURCES.md`. A900 and C800
+  remain excluded -- no bundled-chassis or "internal storage" language was found for either.
+- **Selecting an External Shelf Type on an Internal-Bay Platform Ignored the Internal Capacity
+  Entirely**: `getShelfCount()` (and the disk-count dropdown cap, the BOM's shelf-quantity line,
+  and the capacity solver) previously shelved the *entire* disk count whenever an external shelf
+  type (NS224/DS224C/DS212C) was selected, even on a platform with real internal bays -- e.g. an
+  AFF A90 (48 internal bays) with 60 disks and NS224 selected computed 3 external shelves
+  (`ceil(60/24)`) instead of the correct 1 (the first 48 disks need no shelf at all; only the
+  remaining 12 do: `ceil((60-48)/24)`). Internal capacity is now always consumed first --
+  external shelves are only provisioned for the overflow beyond it -- across cabling, CLI, BOM,
+  documentation, SVG diagrams, the disk-count dropdown's hard cap, and the capacity solver's
+  achievable range, all of which now correctly reflect the combined internal+external maximum.
+
+### Changed
+- **README Updated for v1.9.0**: Added a "What's New in v1.9.0" summary (Internal shelf option,
+  Target Usable Capacity solver, the controller-switch re-cap fix) to the README's version
+  history -- it had been left at the v1.8.1 summary after that release shipped.
+
 ## [1.9.0] - 2026-08-15
 
 ### Added
