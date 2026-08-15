@@ -3118,7 +3118,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.1</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.2</span>
       </div>
     </header>
 
@@ -4966,7 +4966,7 @@ lucide.createIcons({icons});\``);if(typeof c>"u")throw new Error("`createIcons()
   <!-- App scripts -->
 
   <script>
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.1)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.2)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -9463,9 +9463,14 @@ function generateCablingRows() {
       }
 
       // 2. Storage Cabling (Shelves local to each site). Loops over HA pairs (not shelves) so
-      // every pair is guaranteed at least one shelf cabling entry, even when the configured disk
-      // count yields fewer physical shelves per site than there are HA pairs at that site --
-      // otherwise pairs beyond shelfCount were silently omitted from the diagram entirely.
+      // every pair is guaranteed its own dedicated shelf cabling entry, even when the configured
+      // disk count yields fewer physical shelves per site than there are HA pairs -- pairs beyond
+      // shelfCount get the NEXT shelf number (Shelf A2, A3, ...), never reusing a shelf another
+      // pair already occupies: a single NS224 shelf has only 4 physical storage ports (2 per NSM),
+      // fully consumed by ONE HA pair's redundant multipath wiring, so two independent HA pairs
+      // can never physically share one shelf. validateForm() separately flags this under-
+      // provisioned case so the user knows to add disks/shelves, rather than the diagram silently
+      // implying more shelves exist than the sizing calculator's shelfCount says were ordered.
       const numPairs = Math.max(1, Math.ceil(halfNodes / 2));
       const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
       const sizingInfo = getExpansionCardsAndPorts(model, state.sizing.shelfType, shelvesPerPair);
@@ -9485,7 +9490,7 @@ function generateCablingRows() {
 
         for (let k = 0; k < shelvesForThisPair; k++) {
           const rawShelfIdx = shelfStart + k;
-          const s = (rawShelfIdx % shelfCount) + 1;
+          const s = rawShelfIdx + 1;
           const stackIdx = Math.floor(k / stackSize);
           const activePorts = sizingInfo.portPairs[stackIdx] || sizingInfo.portPairs[sizingInfo.portPairs.length - 1];
 
@@ -9513,7 +9518,7 @@ function generateCablingRows() {
 
         for (let k = 0; k < shelvesForThisPair; k++) {
           const rawShelfIdx = shelfStart + k;
-          const s = (rawShelfIdx % shelfCount) + 1;
+          const s = rawShelfIdx + 1;
           const stackIdx = Math.floor(k / stackSize);
           const activePorts = sizingInfo.portPairs[stackIdx] || sizingInfo.portPairs[sizingInfo.portPairs.length - 1];
 
@@ -9582,10 +9587,13 @@ function generateCablingRows() {
         }
       }
 
-      // 2. Storage Cabling (shelves distributed across HA pairs; every pair is guaranteed
-      // at least one shelf cabling entry, even if the configured disk count yields fewer
-      // physical shelves than HA pairs -- previously this loop iterated over shelves, so any
-      // HA pair beyond shelfCount was silently omitted from the diagram entirely.
+      // 2. Storage Cabling (shelves distributed across HA pairs; every pair gets its own
+      // dedicated shelf cabling entry, even if the configured disk count yields fewer physical
+      // shelves than HA pairs -- pairs beyond shelfCount get the NEXT shelf number (Shelf 2, 3,
+      // ...), never reusing a shelf another pair already occupies: a single NS224 shelf has only
+      // 4 physical storage ports (2 per NSM), fully consumed by ONE HA pair's redundant multipath
+      // wiring, so two independent HA pairs can never physically share one shelf. validateForm()
+      // separately flags this under-provisioned case.
       const numPairs = Math.max(1, Math.ceil(nodeCount / 2));
       const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
       const sizingInfo = getExpansionCardsAndPorts(model, state.sizing.shelfType, shelvesPerPair);
@@ -9598,7 +9606,7 @@ function generateCablingRows() {
 
         for (let k = 0; k < shelvesForThisPair; k++) {
           const rawShelfIdx = shelfStart + k;
-          const shelfNum = (rawShelfIdx % shelfCount) + 1;
+          const shelfNum = rawShelfIdx + 1;
           const stackIdx = Math.floor(k / stackSize);
           const activePorts = sizingInfo.portPairs[stackIdx] || sizingInfo.portPairs[sizingInfo.portPairs.length - 1];
 
@@ -13328,6 +13336,25 @@ function validateForm() {
           msg: `NS224 Shelves (${shelfCount}): Direct cabling more than 2 NS224 shelves requires additional PCIe NVMe expansion adapters.`,
           why: "Standard controller cards have limited ports. For configurations exceeding 2 shelves, switched storage fabric is recommended.",
           fix: "Verify you have enough onboard or adapter ports, or consider using a storage switch fabric."
+        });
+      }
+
+      // Insufficient shelves for the configured HA pair count [NEW]. A single shelf's 4
+      // physical storage ports (2 per NSM) are fully consumed by one HA pair's redundant
+      // multipath wiring -- two independent HA pairs can never physically share one shelf, so
+      // the cabling diagram assigns each pair beyond shelfCount its own additional shelf number
+      // rather than an impossible shared connection. This warning explains that gap.
+      const effectiveNodeCount = parseInt(state.sizing.nodeCount) || 2;
+      const pairsNeeded = (state.metrocluster && state.metrocluster.enabled)
+        ? Math.max(1, Math.ceil((effectiveNodeCount / 2) / 2)) * 2 // per-site pairs, both sites
+        : Math.max(1, Math.ceil(effectiveNodeCount / 2));
+      if (state.platform === "ontap" && pairsNeeded > Math.max(1, shelfCount)) {
+        warnings.push({
+          step: 1,
+          title: "Insufficient Shelves for HA Pair Count",
+          msg: `Disk Count (${state.sizing.diskCount}) provisions ${Math.max(1, shelfCount)} shelf(es), but ${effectiveNodeCount} nodes need ${pairsNeeded} shelf(es) minimum -- one dedicated shelf per HA pair.`,
+          why: "Each NS224 shelf's 4 physical storage ports are fully consumed by a single HA pair's redundant multipath wiring. Separate HA pairs cannot share a shelf, so the cabling diagram now shows extra shelves beyond what the current Disk Count implies.",
+          fix: `Increase Disk Count on Step 1 so each HA pair gets its own shelf (at least ${pairsNeeded * 24} disks for ${pairsNeeded} shelf(es) of a 24-slot NS224), or reduce Node Count.`
         });
       }
 

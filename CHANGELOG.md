@@ -2,6 +2,11 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.7.2] - 2026-08-14
+
+### Fixed
+- **Storage Cabling Diagram Oversubscribed Shared Shelves**: The v1.7.1 fix that stopped HA pairs from being silently dropped from the cabling diagram (when disk count implied fewer shelves than HA pairs) cycled extra pairs back onto an *already-fully-wired* earlier shelf instead of giving them their own. On a 4-node cluster with the default 24-disk/1-shelf configuration, this drew both HA pairs (4 independent controllers) all connected to the same single NS224 shelf's 4 physical storage ports -- a shelf's ports are fully consumed by one HA pair's redundant multipath wiring, so two separate pairs can never physically share one. Each pair beyond the configured shelf count now gets its own additional shelf number (Shelf 2, Shelf 3, ...) instead of reusing one another pair already occupies. Added a matching "Insufficient Shelves for HA Pair Count" validation warning explaining the gap and how to fix it (increase Disk Count, or reduce Node Count).
+
 ## [1.7.1] - 2026-08-14
 
 ### Fixed
