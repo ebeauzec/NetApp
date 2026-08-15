@@ -160,7 +160,7 @@
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.8.1</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.9.0</span>
       </div>
     </header>
 
@@ -417,6 +417,23 @@
               <div>
                 <label for="sizingDiskCount">Disks per Node Pair <span class="required">*</span></label>
                 <select class="form-control" id="sizingDiskCount"></select>
+              </div>
+            </div>
+
+            <div class="form-group double-col">
+              <div>
+                <label for="sizingTargetCapacity">Target Usable Capacity <span style="font-weight:400; color:var(--text-muted);">(optional — auto-solves Disks per Node Pair above)</span></label>
+                <div style="display:flex; gap:8px;">
+                  <input type="number" class="form-control" id="sizingTargetCapacity" min="0" step="any" placeholder="e.g. 50">
+                  <select class="form-control" id="sizingTargetCapacityUnit" style="max-width:90px; flex:0 0 auto;">
+                    <option value="GB">GB</option>
+                    <option value="TB" selected>TB</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label>&nbsp;</label>
+                <div id="targetCapacitySolveStatus" style="font-size:0.85rem; color:var(--text-muted); padding-top:10px;"></div>
               </div>
             </div>
 

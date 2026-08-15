@@ -2,6 +2,39 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.9.0] - 2026-08-15
+
+### Added
+- **"Internal (No External Shelf)" Drive Shelf Option**: Platforms whose disks sit directly in
+  the controller chassis (AFF/ASA A150, A250/C250, A400/C400, A20, A30/C30, A50/C60, and
+  FAS2820/FAS2750 -- see `DATA_SOURCES.md` for sourced bay counts) now offer "Internal" as a
+  Drive Shelf Type choice, alongside NS224/DS224C/DS212C. Selecting it produces a configuration
+  with zero external shelves: no shelf boxes in the cabling diagrams, no shelf cabling rows, no
+  Storage Expansion Shelf or PCIe expansion card BOM line items, and the Disks per Node Pair
+  field is capped at that platform's real internal bay count instead of a shelf-stacking limit.
+  Previously every platform was forced to select at least one external shelf's worth of disks
+  (minimum 12) even when its actual base capacity is disks built into the controller itself.
+- **"Target Usable Capacity" Sizing Input**: An optional field on Step 1 that reverse-solves the
+  minimum Disks per Node Pair needed to reach a target cluster-wide usable capacity (in GB or
+  TB), given the currently selected controller, shelf type, disk size, RAID type/group size, and
+  spare disk count. Lets an architect size from "I need 50TB usable" directly instead of
+  iterating on disk count by hand; the solved value is capped at the platform's real hard limit
+  (see below) and clearly flags when a target isn't achievable on the current platform/shelf
+  choice. Re-solves automatically if a dependent field (RAID settings, disk size, node count,
+  shelf type, controller) changes while a target is still set.
+
+### Fixed
+- **Switching Controllers Never Re-Capped Disks per Node Pair**: Changing the Controller Model
+  dropdown had no listener wiring to re-run the shelf-type/disk-count option rebuild at all --
+  the v1.8.0/v1.8.1 hard caps only took effect on initial page load or platform switch, not when
+  interactively picking a different controller. Worse, even where the rebuild *did* run, a
+  pre-existing "preserve a value the preset list doesn't have" fallback (meant for odd
+  ASUP-parsed values) unconditionally re-added the previous disk count into the dropdown even
+  when it exceeded the newly-selected platform's real cap -- e.g. switching from an AFF A1K (96
+  disks/pair) to an AFF A150 (24 disks/pair) silently kept 96 selected and offered. Both fixed:
+  the controller dropdown now re-triggers the full option rebuild, and the fallback no longer
+  re-adds a value beyond the current platform/shelf's real maximum.
+
 ## [1.8.1] - 2026-08-15
 
 Closes out the gaps explicitly flagged as unresearched in v1.8.0's `DATA_SOURCES.md` update:

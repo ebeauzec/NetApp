@@ -225,6 +225,44 @@ NAS nodes, versus a smaller platform-specific ceiling) -- no single public
 source enumerating this per platform was found; Hardware Universe is the
 authoritative source and remains login-gated.
 
+### Real internal drive bay counts (v1.9.0)
+
+`getInternalBayCount()` returns the number of disk bays built directly into
+the controller chassis for platforms where this is genuine (no separate NSM
+shelf module, no shelf-to-controller cabling at all for that base capacity)
+-- distinct from platforms whose "first shelf" is a real, separately-cabled
+NS224 enclosure that just happens to be bundled/co-packaged (AFF/ASA
+A70/A90/C80, A1K, A900, C800 -- these are deliberately **excluded** and
+still require selecting an external shelf type, consistent with the real
+`getRealMaxNs224Shelves()` table above, which already treats their base
+unit as consuming "Shelf 1").
+
+| Platform | Internal bays | Source |
+|---|---|---|
+| AFF/ASA A150 | 24 | Vendor spec summary: "2RU x 24-slot enclosure", same chassis as A250 |
+| AFF/ASA A250, C250 | 24 | Vendor spec summary: "space on the frontend provisioned to store up to 24 internal NVMe SSDs" |
+| AFF/ASA A400, C400 | 48 | Vendor spec summary: "4U chassis with 48 internal SSD slots" |
+| AFF/ASA A20 | 24 | Vendor spec summary: "2U chassis with 24 internal SSD slots" |
+| AFF/ASA A30, C30 | 24 | Vendor spec summary (2U variant; a 4U/48-bay variant is mentioned for some SKUs but not modeled here -- see note below) |
+| AFF/ASA A50, C60 | 24 | Same source and caveat as A30/C30 |
+| FAS2820, FAS2750 | 12 | Vendor spec summary: "2U chassis with 12 drive slots... maximum number of internal drives is 12" |
+
+**Lower-confidence note**: A30/A50 (and their C-series equivalents) are
+described in vendor material as available in both 2U/24-bay and 4U/48-bay
+chassis configurations; this tool models only the 24-bay figure (the more
+conservative, more commonly cited one) since it could not confirm which
+specific SKU/configuration corresponds to which bay count. A user who knows
+their specific A30/A50/C30/C60 is the 48-bay variant can still reach that
+capacity by selecting an external shelf type instead of "Internal".
+
+**Not researched**: A70/A90/A1K/A900/C80/C800's exact internal-vs-bundled-shelf
+architecture was ambiguous in available sources (one search described A70/A90
+as having "48 internal SSD slots" in an integrated 4U chassis, which would
+argue for inclusion here) -- deliberately left out of `getInternalBayCount()`
+rather than risk contradicting the already-verified `getRealMaxNs224Shelves()`
+figures for the same platforms, which model their base capacity as a real,
+separately-cabled NS224 shelf.
+
 ## What this deliberately does NOT check
 
 **Hardware platform additions** (new AFF/ASA/FAS/StorageGRID appliance
