@@ -154,6 +154,42 @@ that's already wired for another role (e.g. AFF/ASA A90's cluster occupies
 slots 1 and 7 -- an expansion card can no longer be proposed for slot 1). See
 `CHANGELOG.md`'s v1.7.6 entry.
 
+### Real per-platform NS224 max shelf counts (v1.8.0)
+
+`getRealMaxNs224Shelves()` returns a real, sourced maximum total NS224 shelves
+per HA pair (1 onboard/base + hot-add capacity), used for `getExpansionCardsAndPorts()`'s
+`maxDirectAttachShelves` and for the hard cap on the Step 1 Disk Count dropdown.
+This **replaces** the PCIe-slot-count formula (`stackSize * (slotsAvailable + 1)`)
+for every platform listed below -- that formula was never itself sourced against
+real shelf-per-slot ratios and is confirmed wrong (it implied an AFF A400 could
+direct-attach up to 8 NS224 shelves; NetApp's own KB caps it at 2).
+
+| Platform | Max NS224 shelves / HA pair | Source |
+|---|---|---|
+| AFF/ASA A900 | 4 | `github.com/NetAppDocs/ontap-systems/_include/cable-a900-hot-add-shelf.adoc` -- "at least one existing... hot-adding up to three additional" |
+| AFF/ASA C800 | 2 | `.../_include/cable-a800-c800-hot-add-shelf.adoc` (shared with A800, not in this tool's platform list) |
+| AFF/ASA A400, C400 | 2 | NetApp KB "Is it possible to add more than two NS224 shelves in AFF A400 systems?" (`kb.netapp.com/on-prem/ontap/OHW/OHW-KBs/...`) + `.../_include/cable-a400-c400-hot-add-shelf.adoc` |
+| AFF/ASA A250, C250 | 2 | `.../_include/cable-a250-c250-hot-add-shelf.adoc` -- 1 onboard (e2a/e2b) + 1 hot-add (e1a/e1b), single procedure shown |
+| AFF/ASA A150 | 1 | Community/vendor summary of AFF A150 specs: onboard storage is SAS, not NS224; one mezzanine card slot option is a 2-port 100GbE RoCEv2 card for exactly one additional NS224 shelf. Not from a NetAppDocs hot-add guide (none exists for A150) -- **lower confidence than the other rows in this table** |
+| AFF/ASA A1K | 4 | `.../ns224/hot-add-aff-cable-a1k.adoc` -- "hot-add up to three additional NS224 shelves (for a total of four)" |
+| AFF/ASA A90, A70, C80 | 2 | `.../_include/cable-70-90-hot-add-shelf.adoc` -- "hot-adding up to two additional shelves" from a base of no external shelves |
+| AFF/ASA A50, A30, C60, C30 | 3 | `.../ns224/hot-add-aff-cable-a30-50-60.adoc` -- "hot-add up to two NS224 shelves... when additional storage (to the internal shelf) is needed" (1 internal + 2 hot-add) |
+| AFF/ASA A20 | 2 | `.../ns224/hot-add-aff-cable-a20.adoc` -- "hot-add one NS224 shelf... when additional storage (to the internal shelf) is needed" (1 internal + 1 hot-add) |
+| FAS70, FAS90, FAS8700, FAS9500, FAS2820 | *not verified* | No NS224 hot-add guide found under `ns224/hot-add-aff-*` or `ns224/hot-add-eoa-*` (the latter covers only end-of-availability A320/A700/FAS500f) for the current FAS lineup. Falls back to the PCIe-slot-count formula -- **not capped by real data**, kept at its previous (wider) range rather than guessing. |
+
+**Not yet researched**: real per-platform max shelf counts for DS224C (SAS,
+24-bay) and DS212C (SAS, 12-bay) -- these shelf types still use the
+PCIe-slot-count formula unconditionally (SAS genuinely supports multi-shelf
+daisy-chain stacks, unlike NS224's roughly 1-shelf-per-port-pair pattern, so
+the formula is plausible for SAS but has not been cross-checked against a
+per-platform SAS install guide the way the NS224 table above was). Also not
+yet researched: real per-platform maximum ONTAP cluster node counts (the
+Node Count dropdown currently offers the same `[2, 4, 6, 8, 12]` regardless
+of selected controller) -- unlike shelf capacity, cluster size limits are
+driven more by ONTAP version and protocol (NAS vs. SAN) than by individual
+controller hardware, and no single per-platform source was found for it in
+this pass.
+
 ## What this deliberately does NOT check
 
 **Hardware platform additions** (new AFF/ASA/FAS/StorageGRID appliance

@@ -2,6 +2,70 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.8.0] - 2026-08-15
+
+Full-codebase audit against NetApp's own hardware documentation, prompted by a request to
+find any remaining hidden issues in the same class as v1.7.3-v1.7.6 and to make the tool
+physically incapable of producing an unsupported configuration. Combines a systematic manual
++ agent-assisted review of every generator function with new externally-sourced NetApp
+platform data (github.com/NetAppDocs, NetApp Knowledge Base -- see `DATA_SOURCES.md`).
+
+### Added
+- **Hard Cap on Disks per Node Pair**: The Disk Count dropdown on Step 1 now only offers values
+  that the selected controller can actually direct-attach cable for the selected shelf type --
+  it is no longer possible to select a configuration this tool cannot physically support. The
+  cap is driven by real, sourced per-platform NS224 shelf limits (`getRealMaxNs224Shelves()`,
+  see below); platforms without a published NS224 hot-add guide (currently the FAS lineup) keep
+  the previous, wider range rather than guessing at an unverified limit.
+- **Real Per-Platform NS224 Shelf Limits**: Added `getRealMaxNs224Shelves()`, sourced directly
+  from NetApp's per-platform NS224 hot-add cabling guides and Knowledge Base, replacing the
+  PCIe-slot-count formula that `maxDirectAttachShelves` (v1.7.4) was previously derived from.
+  That formula turned out not to match reality: it implied an AFF A400 could direct-attach up
+  to 8 NS224 shelves, but NetApp's own KB caps it at 2 (confirmed: A1K=4, A900=4, A400/C400=2,
+  A250/C250=2, A150=1, A70/A90/C80=2, C800=2, A30/A50/C30/C60=3, A20=2). The formula remains as
+  a documented, lower-confidence fallback for shelf types and platforms without sourced data.
+
+### Fixed
+- **(Critical) Aggregates Were Only Ever Created on the First HA Pair**: `generateOntapCliCode()`
+  and `generateAnsiblePlaybook()` hardcoded `storage aggregate create` (and the equivalent
+  `na_ontap_aggregate` task) to exactly two aggregates on `node1`/`node2`, with no loop over the
+  cluster's other HA pairs -- unlike the `storage port modify` loop just above it, which
+  correctly iterates every node. On an 8-node (4-pair) cluster, the generated script enabled
+  storage ports on all 8 nodes but created aggregates on only the first 2 -- nodes 3-8 were left
+  completely unprovisioned. Volume placement had the same bug: every volume round-robined onto
+  only `aggr_data_1`/`aggr_data_2` (`idx % 2`) regardless of cluster size. Both generators now
+  loop over every HA pair (`aggr_data_1` through `aggr_data_N`, one pair of aggregates per HA
+  pair) and round-robin volumes across all of them (`idx % nodeCount`).
+- **Capacity Calculator Assumed Exactly 2 Aggregates Cluster-Wide**: `recalculateCapacity()` and
+  `generateDeploymentGuide()` both computed `disksPerAggr = totalDisks / 2`, the same "flat 2
+  aggregates" assumption as the bug above, baked directly into the capacity math. This
+  undercounted parity overhead (and therefore overstated usable/logical capacity) for any
+  cluster with more than one HA pair -- confirmed by the fix now scaling perfectly linearly per
+  pair (a 4-pair cluster reports exactly 4x a 1-pair cluster's usable capacity; it previously
+  did not). Both now compute one aggregate per node.
+- **DS212C Shelf Count Was Computed as if It Were a 24-Bay Shelf**: Every `shelfCount =
+  Math.ceil(diskCount / 24)` calculation (11 call sites: cabling table, CLI, BOM, HLD/LLD docs,
+  all SVG diagrams) hardcoded 24 disks per shelf, but DS212C is a real 12-bay LFF SAS shelf, not
+  24-bay like NS224/DS224C -- undercounting DS212C shelves (and therefore cabling, PCIe card
+  sizing, and generated CLI) by half. Added `getShelfBayCount(shelfType)` and fixed every call
+  site to use it. One BOM line item (`shelfQty`) already handled this correctly and was
+  untouched.
+- **LUN Size Overprovisioning Check Ignored Unit Mismatches**: `validateForm()` summed
+  `lun.size` across a volume's LUNs and compared the raw sum to `vol.size` with no unit
+  conversion, even though LUN size and volume size are independently selectable in GB or TB.
+  A 1TB volume with two 500GB LUNs (exactly at capacity) was incorrectly flagged as
+  "Overprovisioned Volume Space" (`1000 > 1`); the reverse case (a small-GB volume with a
+  large-TB LUN) could equally go undetected. Now normalizes both sides to GB before comparing,
+  matching the pattern already used correctly by the "Aggregate Level Capacity" check ~60 lines
+  below it in the same function.
+- **Bill of Materials Hardcoded an "AFF-" Part-Number Prefix for Every Platform**: The
+  "Controller Pair" BOM line always prepended `AFF-` to `state.sizing.controller`, even though
+  that field's format already varies by platform: ASA values are pre-prefixed (`ASA_A90`) and
+  FAS values are plain (`FAS9500`). This rendered nonsensical part numbers like `AFF-ASA_A1K`
+  (double-branded, wrong family) and `AFF-FAS9500` (a hybrid FAS array mislabeled as All-Flash)
+  on this customer-facing procurement document. Now derives the correct prefix (or none) from
+  `state.ontapPlatform`.
+
 ## [1.7.6] - 2026-08-15
 
 ### Fixed

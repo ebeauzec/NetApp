@@ -3118,7 +3118,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.6</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.8.0</span>
       </div>
     </header>
 
@@ -4966,7 +4966,7 @@ lucide.createIcons({icons});\``);if(typeof c>"u")throw new Error("`createIcons()
   <!-- App scripts -->
 
   <script>
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.6)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.8.0)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -8768,19 +8768,23 @@ function recalculateCapacity() {
 
   // ONTAP capacity logic
   const diskSizeGb = parseDiskSizeToGb(state.sizing.diskSize);
-  const totalDisks = state.sizing.diskCount * (state.sizing.nodeCount / 2);
+  const numPairs = state.sizing.nodeCount / 2;
+  const totalDisks = state.sizing.diskCount * numPairs;
   const rawGb = totalDisks * diskSizeGb;
 
   const raidType = state.sizing.raidType;
   const raidGroupSize = state.sizing.raidGroupSize;
 
-  // Assuming symmetric storage across aggregates
-  const disksPerAggr = totalDisks / 2;
+  // One aggregate per node (2 per HA pair, matching generateOntapCliCode()/
+  // generateAnsiblePlaybook()) -- not a flat 2 aggregates cluster-wide. diskCount is already
+  // per-pair, so each aggregate holds the same disksPerAggr regardless of pair count.
+  const totalAggregates = state.sizing.nodeCount;
+  const disksPerAggr = state.sizing.diskCount / 2;
   const numRaidGroups = Math.ceil(disksPerAggr / raidGroupSize);
   const parityDisksPerAggr = numRaidGroups * (raidType === "raid_dp" ? 2 : 3);
-  const rawTotalParityDisks = parityDisksPerAggr * 2;
+  const rawTotalParityDisks = parityDisksPerAggr * totalAggregates;
 
-  const rawTotalSpareDisks = state.sizing.spareDisks * (state.sizing.nodeCount / 2) * 2;
+  const rawTotalSpareDisks = state.sizing.spareDisks * numPairs * 2;
 
   // Clamp parity + spares so the visualized capacity segments can never exceed the physical raw capacity
   const totalParityDisks = Math.min(rawTotalParityDisks, totalDisks);
@@ -9156,6 +9160,17 @@ function updateDiskCountRange() {
       options = [12, 24, 36, 48, 72, 96, 120, 144];
       defaultVal = 24;
     }
+
+    // Hard-cap the offered disk counts to what this platform can actually direct-attach
+    // cable, so a configuration exceeding the platform's real shelf capacity can never be
+    // selected in the first place (see getExpansionCardsAndPorts()/DATA_SOURCES.md for the
+    // sourced per-platform limits). shelfCount passed here is a placeholder -- the cap only
+    // depends on controller + shelf type, not the disk count being validated.
+    const cardSizing = getExpansionCardsAndPorts(state.sizing.controller, shelf, 1);
+    const maxDisksForPlatform = cardSizing.maxDirectAttachShelves * getShelfBayCount(shelf);
+    const cappedOptions = options.filter(v => v <= maxDisksForPlatform);
+    options = cappedOptions.length > 0 ? cappedOptions : [Math.min(...options)];
+    if (defaultVal > maxDisksForPlatform) defaultVal = options[options.length - 1];
   }
 
   // Add parsed if missing
@@ -9253,6 +9268,39 @@ function updateCapacityUI(raw, usable, snap, wafl, spare, parity, ratio, logical
   }
 }
 
+// Real per-shelf bay count. DS212C is a 12-bay LFF SAS shelf; NS224 and DS224C are both
+// 24-bay. Every shelfCount calculation in the app must divide by this, not a hardcoded 24 --
+// hardcoding 24 undercounted DS212C shelves (and therefore cabling/CLI/BOM/PCIe-card sizing)
+// by half. See CHANGELOG.md.
+function getShelfBayCount(shelfType) {
+  return shelfType === "DS212C" ? 12 : 24;
+}
+
+// Real NS224 maximum total shelves per HA pair (1 onboard/base + hot-add capacity), sourced
+// directly from NetApp's per-platform NS224 hot-add cabling guides (github.com/NetAppDocs/
+// ontap-systems, ns224/hot-add-*.adoc and _include/cable-*-hot-add-shelf.adoc) and NetApp's
+// Knowledge Base -- NOT derived from the PCIe-slot-count formula in getExpansionCardsAndPorts()
+// below, which does not match real shelf-per-slot ratios (that formula implied an AFF A400
+// could take 8 NS224 shelves; NetApp's own KB caps it at 2). Returns null for platforms with
+// no published per-platform NS224 hot-add guide (currently the FAS lineup), in which case the
+// caller falls back to the slot-count formula. See DATA_SOURCES.md.
+function getRealMaxNs224Shelves(model) {
+  const m = (model || "").toUpperCase();
+  // Order matters: longer/more specific codes must be checked before shorter substrings they
+  // contain (e.g. "A900" contains "A90", "C800" contains "C80") -- same precaution as
+  // getControllerPorts().
+  if (m.includes("A900")) return 4;                            // 1 existing + up to 3 additional
+  if (m.includes("C800")) return 2;                             // shares the A800/C800 hot-add guide
+  if (m.includes("A400") || m.includes("C400")) return 2;       // confirmed via NetApp KB
+  if (m.includes("A250") || m.includes("C250")) return 2;       // 1 onboard (e2a/e2b) + 1 hot-add (e1a/e1b)
+  if (m.includes("A150")) return 1;                             // SAS-onboard platform; NS224 only via 1 RoCE mezzanine slot
+  if (m.includes("A1K")) return 4;                              // 1 existing + up to 3 additional
+  if (m.includes("A90") || m.includes("A70") || m.includes("C80")) return 2;
+  if (m.includes("A50") || m.includes("A30") || m.includes("C60") || m.includes("C30")) return 3;
+  if (m.includes("A20")) return 2;                              // 1 onboard + 1 hot-add
+  return null;
+}
+
 function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
   const m = model.toUpperCase();
   const isNvme = shelfType === "NS224";
@@ -9316,18 +9364,23 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
   slotPriority = slotPriority.filter(s => !occupiedSlots.has(s));
 
   result.slotsAvailable = slotPriority.length;
-  // Every expansion slot adds one more stack (stackSize shelves) of direct-attach capacity
-  // beyond the single onboard stack every platform has.
-  result.maxDirectAttachShelves = stackSize * (slotPriority.length + 1);
+  // Prefer the real, sourced per-platform NS224 max (getRealMaxNs224Shelves()) over the
+  // PCIe-slot-count formula wherever it's available -- the formula is only a rough estimate
+  // and is known to disagree with real NetApp-published limits (see that function's comment).
+  const realMaxShelves = getRealMaxNs224Shelves(model);
+  const formulaMaxShelves = stackSize * (slotPriority.length + 1);
+  result.maxDirectAttachShelves = (shelfType === "NS224" && realMaxShelves !== null) ? realMaxShelves : formulaMaxShelves;
+  result.maxShelvesVerified = shelfType === "NS224" && realMaxShelves !== null;
 
   if (cardsNeeded <= 0) {
+    result.overflow = shelfCount > result.maxDirectAttachShelves;
     return result;
   }
 
-  // Never invent a slot number beyond what this platform actually has -- a config that
-  // needs more cards than physical slots is a real overflow (flagged via result.overflow),
+  // Never invent a slot number beyond what this platform actually has, and never exceed the
+  // real sourced max shelf count -- either is a real overflow (flagged via result.overflow),
   // not something to paper over with a fabricated slot number.
-  result.overflow = cardsNeeded > slotPriority.length;
+  result.overflow = cardsNeeded > slotPriority.length || shelfCount > result.maxDirectAttachShelves;
   const cardsToPlace = Math.min(cardsNeeded, slotPriority.length);
   result.slotsUsed = cardsToPlace;
 
@@ -9440,7 +9493,7 @@ function generateCablingRows() {
   const nodeCount = parseInt(state.sizing.nodeCount) || 2;
   const clusterCabling = state.sizing.clusterCabling;
   const switchModel = state.sizing.clusterSwitchModel;
-  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
   const ports = getControllerPorts(model);
   const proto = state.protocol;
 
@@ -9681,7 +9734,7 @@ function updateCablingPlanner() {
   const clusterCabling = state.sizing.clusterCabling;
   const switchModel = state.sizing.clusterSwitchModel;
   const ports = getControllerPorts(model);
-  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
 
   const isSg = state.platform === "storagegrid";
   const cablingMatrixContainer = document.querySelector("#stepPanel3 .cabling-matrix-container");
@@ -11311,7 +11364,7 @@ function generateOntapCliCode() {
     code += `# Enable storage interfaces for NS224 NVMe RoCE or SAS shelves\n`;
     const model = state.sizing.controller;
     const shelfType = state.sizing.shelfType;
-    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
     
     // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
     // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
@@ -11341,8 +11394,15 @@ function generateOntapCliCode() {
       const aggrPrefix = state.sizing.aggrNamePrefix || "aggr_data";
       const halfDiskCount = Math.floor(state.sizing.diskCount / 2);
       const mirrorParam = (state.metrocluster && state.metrocluster.enabled) ? " -mirror true" : "";
-      code += `storage aggregate create -aggregate ${aggrPrefix}_1 -node ${node1} -diskcount ${halfDiskCount} -raidtype ${state.sizing.raidType} -raidgroupsize ${state.sizing.raidGroupSize}${mirrorParam}\n`;
-      code += `storage aggregate create -aggregate ${aggrPrefix}_2 -node ${node2} -diskcount ${halfDiskCount} -raidtype ${state.sizing.raidType} -raidgroupsize ${state.sizing.raidGroupSize}${mirrorParam}\n`;
+      // One aggregate per node, across every HA pair -- not just the first pair. diskCount is
+      // already per-pair, so halfDiskCount (that pair's disks split across its 2 nodes) is the
+      // same for every pair.
+      for (let p = 1; p <= nodeCount / 2; p++) {
+        const pairNodeA = state.customNodeNames[2 * p - 2] || `cluster1-0${2 * p - 1}`;
+        const pairNodeB = state.customNodeNames[2 * p - 1] || `cluster1-0${2 * p}`;
+        code += `storage aggregate create -aggregate ${aggrPrefix}_${2 * p - 1} -node ${pairNodeA} -diskcount ${halfDiskCount} -raidtype ${state.sizing.raidType} -raidgroupsize ${state.sizing.raidGroupSize}${mirrorParam}\n`;
+        code += `storage aggregate create -aggregate ${aggrPrefix}_${2 * p} -node ${pairNodeB} -diskcount ${halfDiskCount} -raidtype ${state.sizing.raidType} -raidgroupsize ${state.sizing.raidGroupSize}${mirrorParam}\n`;
+      }
       code += `\n`;
     }
   }
@@ -11506,7 +11566,7 @@ function generateOntapCliCode() {
       const isNasActive = activeProtos.some(p => p === "nfs" || p === "smb");
       const junctionPathStr = (isSan || !isNasActive) ? "" : ` -junction-path /${vol.name}`;
       const encryptStr = vol.encryption ? " -encrypt true" : "";
-      const aggrName = state.mode === "greenfield" ? ((state.sizing.aggrNamePrefix || "aggr_data") + "_" + (idx % 2 === 0 ? "1" : "2")) : vol.aggregate;
+      const aggrName = state.mode === "greenfield" ? ((state.sizing.aggrNamePrefix || "aggr_data") + "_" + ((idx % nodeCount) + 1)) : vol.aggregate;
       const spaceGuaranteeStr = isSan ? " -space-guarantee none" : "";
       
       if (state.mode === "greenfield" || !vol.fromAsup) {
@@ -12166,6 +12226,7 @@ function generateStoragegridCliCode() {
 
 function generateAnsiblePlaybook() {
   const proto = state.protocol;
+  const nodeCount = parseInt(state.sizing.nodeCount) || 2;
   const node1 = state.customNodeNames[0] || "cluster1-01";
   const node2 = state.customNodeNames[1] || "cluster1-02";
   let code = `---
@@ -12293,34 +12354,40 @@ function generateAnsiblePlaybook() {
     return play;
   }
 
-  // Greenfield Aggregates Setup [NEW]
+  // Greenfield Aggregates Setup -- one aggregate per node, across every HA pair, not just
+  // the first pair. diskCount is already per-pair, so halfDiskCount is the same for every pair.
   if (state.platform === "ontap" && state.mode === "greenfield") {
     const aggrPrefix = state.sizing.aggrNamePrefix || "aggr_data";
     const halfDiskCount = Math.floor(state.sizing.diskCount / 2);
-    
-    code += `    - name: Create Aggregate ${aggrPrefix}_1 on Node 1
+    const raidTypeStr = state.sizing.raidType === "raid_dp" ? "raid_dp" : "raid_tec";
+
+    for (let p = 1; p <= nodeCount / 2; p++) {
+      const pairNodeA = state.customNodeNames[2 * p - 2] || `cluster1-0${2 * p - 1}`;
+      const pairNodeB = state.customNodeNames[2 * p - 1] || `cluster1-0${2 * p}`;
+      code += `    - name: Create Aggregate ${aggrPrefix}_${2 * p - 1} on Node ${2 * p - 1}
       netapp.ontap.na_ontap_aggregate:
         state: present
-        name: "${aggrPrefix}_1"
-        nodes: "${node1}"
+        name: "${aggrPrefix}_${2 * p - 1}"
+        nodes: "${pairNodeA}"
         disk_count: ${halfDiskCount}
         raid_size: ${state.sizing.raidGroupSize}
-        raid_type: "${state.sizing.raidType === "raid_dp" ? "raid_dp" : "raid_tec"}"
+        raid_type: "${raidTypeStr}"
         hostname: "{{ login.hostname }}"
         username: "{{ login.username }}"
         password: "{{ login.password }}"\n\n`;
 
-    code += `    - name: Create Aggregate ${aggrPrefix}_2 on Node 2
+      code += `    - name: Create Aggregate ${aggrPrefix}_${2 * p} on Node ${2 * p}
       netapp.ontap.na_ontap_aggregate:
         state: present
-        name: "${aggrPrefix}_2"
-        nodes: "${node2}"
+        name: "${aggrPrefix}_${2 * p}"
+        nodes: "${pairNodeB}"
         disk_count: ${halfDiskCount}
         raid_size: ${state.sizing.raidGroupSize}
-        raid_type: "${state.sizing.raidType === "raid_dp" ? "raid_dp" : "raid_tec"}"
+        raid_type: "${raidTypeStr}"
         hostname: "{{ login.hostname }}"
         username: "{{ login.username }}"
         password: "{{ login.password }}"\n\n`;
+    }
   }
 
   // Loop over SVMs for ONTAP
@@ -12421,7 +12488,7 @@ function generateAnsiblePlaybook() {
       }
     }
 
-    const aggrName = state.mode === "greenfield" ? ((state.sizing.aggrNamePrefix || "aggr_data") + "_" + (idx % 2 === 0 ? "1" : "2")) : vol.aggregate;
+    const aggrName = state.mode === "greenfield" ? ((state.sizing.aggrNamePrefix || "aggr_data") + "_" + ((idx % nodeCount) + 1)) : vol.aggregate;
     let qosPolicyStr = "";
     if (state.qos.policyType !== "none") {
       const policyName = `qos_${vol.svmName}_policy`;
@@ -12876,14 +12943,17 @@ function generateDeploymentGuide() {
     md += `- **Provisioning SVMs**: ${state.svms.map(s => s.name).join(", ")}\n`;
     md += `- **Access Protocol**: ${proto}\n`;
     const diskSizeGb = parseDiskSizeToGb(state.sizing.diskSize);
-    const totalDisks = state.sizing.diskCount * (state.sizing.nodeCount / 2);
+    const numPairs = state.sizing.nodeCount / 2;
+    const totalDisks = state.sizing.diskCount * numPairs;
     const rawGb = totalDisks * diskSizeGb;
-    
-    const disksPerAggr = totalDisks / 2;
+
+    // One aggregate per node (2 per HA pair) -- not a flat 2 aggregates cluster-wide.
+    const totalAggregates = state.sizing.nodeCount;
+    const disksPerAggr = state.sizing.diskCount / 2;
     const numRaidGroups = Math.ceil(disksPerAggr / state.sizing.raidGroupSize);
     const parityDisksPerAggr = numRaidGroups * (state.sizing.raidType === "raid_dp" ? 2 : 3);
-    const rawTotalParityDisks = parityDisksPerAggr * 2;
-    const rawTotalSpareDisks = state.sizing.spareDisks * (state.sizing.nodeCount / 2) * 2;
+    const rawTotalParityDisks = parityDisksPerAggr * totalAggregates;
+    const rawTotalSpareDisks = state.sizing.spareDisks * numPairs * 2;
     // Clamp parity + spares so the reported capacities can never exceed the physical raw capacity
     const totalParityDisks = Math.min(rawTotalParityDisks, totalDisks);
     const totalSpareDisks = Math.min(rawTotalSpareDisks, Math.max(0, totalDisks - totalParityDisks));
@@ -13307,8 +13377,9 @@ function validateForm() {
         });
       }
 
-      const totalDisks = state.sizing.diskCount * (state.sizing.nodeCount / 2);
-      const disksPerAggr = totalDisks / 2;
+      // One aggregate per node (2 per HA pair) -- disksPerAggr is diskCount-per-pair split
+      // across that pair's 2 nodes, independent of how many pairs the cluster has.
+      const disksPerAggr = state.sizing.diskCount / 2;
       if (disksPerAggr < minRgSize) {
         errors.push({
           step: 1,
@@ -13366,7 +13437,7 @@ function validateForm() {
       // cabling diagrams already (see that function) and there's nothing for the user to fix.
       // Only a true overflow -- more shelves than the platform has expansion slots for -- is
       // flagged, since that's physically impossible to direct-attach cable.
-      const shelfCount = Math.ceil(state.sizing.diskCount / 24);
+      const shelfCount = Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType));
       const shelfCardSizing = getExpansionCardsAndPorts(state.sizing.controller, state.sizing.shelfType, shelfCount);
       if (shelfCardSizing.overflow) {
         errors.push({
@@ -13374,7 +13445,7 @@ function validateForm() {
           title: "Shelf Count Exceeds Direct-Attach Capacity",
           msg: `${state.sizing.shelfType} Shelves (${shelfCount} per HA pair): ${state.sizing.controller} can direct-attach at most ${shelfCardSizing.maxDirectAttachShelves} ${state.sizing.shelfType} shelves per HA pair (1 onboard stack plus ${shelfCardSizing.slotsAvailable} PCIe expansion slot(s)).`,
           why: `Each expansion card adds one more storage stack of capacity, but ${state.sizing.controller} only has ${shelfCardSizing.slotsAvailable} usable slot(s) for this -- there's no physical slot left to cable the remaining shelves directly.`,
-          fix: `Reduce Disk Count on Step 1 to ${shelfCardSizing.maxDirectAttachShelves * 24} or fewer disks per node pair, or use a storage switch fabric topology to scale beyond onboard/PCIe direct-attach limits.`
+          fix: `Reduce Disk Count on Step 1 to ${shelfCardSizing.maxDirectAttachShelves * getShelfBayCount(state.sizing.shelfType)} or fewer disks per node pair, or use a storage switch fabric topology to scale beyond onboard/PCIe direct-attach limits.`
         });
       }
 
@@ -13597,7 +13668,7 @@ function validateForm() {
             fix: "Click the 'Add LUN / Namespace' button under the volume on Step 4."
           });
         } else {
-          let totalLunSize = 0;
+          let totalLunSizeGb = 0;
           vol.luns.forEach((lun, lunIdx) => {
             if (!lun.name.trim()) {
               errors.push({
@@ -13625,7 +13696,11 @@ function validateForm() {
                 fix: "Correct the size parameter to be a positive number."
               });
             } else {
-              totalLunSize += lun.size;
+              // Normalize to GB before summing -- LUNs and their parent volume can each
+              // independently use GB or TB, and summing raw lun.size values ignores that.
+              let lunSizeGb = lun.size;
+              if (lun.sizeUnit === "TB") lunSizeGb *= 1000;
+              totalLunSizeGb += lunSizeGb;
             }
  
             if (lun.sizeUnit === "TB" && lun.size > 16) {
@@ -13639,19 +13714,22 @@ function validateForm() {
             }
           });
  
-          if (totalLunSize > vol.size) {
+          let volSizeGb = vol.size || 0;
+          if (vol.sizeUnit === "TB") volSizeGb *= 1000;
+
+          if (totalLunSizeGb > volSizeGb) {
             errors.push({
               step: 4,
               title: "Overprovisioned Volume Space",
-              msg: `Volume "${vol.name}": Sum of nested ${unitLabel} sizes (${totalLunSize} ${vol.sizeUnit}) exceeds parent volume capacity (${vol.size} ${vol.sizeUnit}).`,
+              msg: `Volume "${vol.name}": Sum of nested ${unitLabel} sizes (${formatCapacity(totalLunSizeGb)}) exceeds parent volume capacity (${formatCapacity(volSizeGb)}).`,
               why: "You cannot create LUNs/Namespaces that collectively require more physical space than their enclosing FlexVol holds.",
               fix: "Increase the parent volume size or reduce the size of the nested LUNs/Namespaces."
             });
-          } else if (totalLunSize >= vol.size * 0.95) {
+          } else if (totalLunSizeGb >= volSizeGb * 0.95) {
             warnings.push({
               step: 4,
               title: "Insufficient Volume Headroom for LUNs",
-              msg: `Volume "${vol.name}": Nested ${unitLabel}s consume ${((totalLunSize / vol.size) * 100).toFixed(0)}% of containing volume capacity (${vol.size} ${vol.sizeUnit}).`,
+              msg: `Volume "${vol.name}": Nested ${unitLabel}s consume ${((totalLunSizeGb / volSizeGb) * 100).toFixed(0)}% of containing volume capacity (${formatCapacity(volSizeGb)}).`,
               why: "ONTAP reserves approximately 1-5% of volume capacity for LUN geometry and file mapping metadata. If the volume size is too close to the LUN size, write operations might fail and force the LUN offline. Snapshot copies will also require additional write headroom.",
               fix: "Increase the parent volume size on Step 4 to be at least 10% (ideally 20%) larger than the sum of its nested LUNs."
             });
@@ -15672,7 +15750,7 @@ function generateSvgPhysicalCabling() {
   const clusterCabling = state.sizing.clusterCabling;
   const switchModel = state.sizing.clusterSwitchModel;
   const shelfType = state.sizing.shelfType;
-  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
   const ports = getControllerPorts(model);
   const proto = state.protocol;
 
@@ -15793,7 +15871,7 @@ function generateSvgPhysicalCabling() {
     const isIp = mcc.type === "ip";
     const mediatorType = mcc.mediator === "mediator" ? "ONTAP Mediator" : (mcc.mediator === "tiebreaker" ? "Tiebreaker Node" : "None");
     const shelfType = state.sizing.shelfType;
-    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
     const hasFabricPool = state.ontapFabricPool && state.ontapFabricPool.enabled;
     
     const scale = parseInt(mcc.scale) || 4;
@@ -16458,7 +16536,7 @@ function generateSvgStorageOnlyCabling() {
   const model = state.sizing.controller;
   const nodeCount = parseInt(state.sizing.nodeCount) || 2;
   const shelfType = state.sizing.shelfType;
-  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+  const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
   const ports = getControllerPorts(model);
 
   const switchAName = (state.customSwitchNames && state.customSwitchNames.switchA) || "Switch-A";
@@ -16803,7 +16881,7 @@ function generateSvgTopology() {
     const isIp = mcc.type === "ip";
     const mediatorType = mcc.mediator === "mediator" ? "ONTAP Mediator" : (mcc.mediator === "tiebreaker" ? "Tiebreaker Node" : "None");
     const shelfType = state.sizing.shelfType;
-    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
     
     const scale = parseInt(mcc.scale) || 4;
     const halfNodes = scale / 2;
@@ -17381,7 +17459,18 @@ function generateBillOfMaterials() {
   if (isSg) {
     bom += `| **StorageGRID Nodes** | Enterprise StorageGRID Hardware Appliance | ${state.sizing.controller} | ${nodeCount} | Distributed Grid storage nodes. |\n`;
   } else {
-    bom += `| **Controller Pair** | High-Availability Controller Enclosure | AFF-${state.sizing.controller} | ${nodeCount / 2} | HA Controller Pairs (dual-controller configurations). |\n`;
+    // state.sizing.controller's format already varies by platform: ASA values are pre-prefixed
+    // ("ASA_A90"), FAS values are plain ("FAS9500"), only AFF values ("A90") need "AFF-" added --
+    // blindly prepending "AFF-" to all three produced nonsense part numbers like "AFF-ASA_A1K".
+    let controllerPartNumber;
+    if (state.ontapPlatform === "asa") {
+      controllerPartNumber = state.sizing.controller.replace("ASA_", "ASA-");
+    } else if (state.ontapPlatform === "afx") {
+      controllerPartNumber = state.sizing.controller;
+    } else {
+      controllerPartNumber = `AFF-${state.sizing.controller}`;
+    }
+    bom += `| **Controller Pair** | High-Availability Controller Enclosure | ${controllerPartNumber} | ${nodeCount / 2} | HA Controller Pairs (dual-controller configurations). |\n`;
   }
   
   // Shelves
@@ -17421,7 +17510,7 @@ function generateBillOfMaterials() {
   if (!isSg) {
     const model = state.sizing.controller;
     const shelfType = state.sizing.shelfType;
-    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
     
     // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
     // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
@@ -18114,7 +18203,7 @@ function generateHldLldDesign() {
     
     const model = state.sizing.controller;
     const shelfType = state.sizing.shelfType;
-    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
+    const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / getShelfBayCount(state.sizing.shelfType)));
     const nodeCount = parseInt(state.sizing.nodeCount);
     
     // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
