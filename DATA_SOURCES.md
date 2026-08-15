@@ -5,7 +5,7 @@
 > records those sources, what the automated checker does and does not cover,
 > and the manual procedure for everything it doesn't.
 >
-> **LAST VERIFIED:** August 14, 2026
+> **LAST VERIFIED:** August 15, 2026
 > **CURRENT LATEST ONTAP:** 9.19.1 (May 2026)
 > **CURRENT LATEST STORAGEGRID:** 12.1
 
@@ -115,6 +115,24 @@ and port structures above are the current, NetApp-qualified baselines, not
 a per-platform compatibility claim.
 
 ---
+
+## Shelf Provisioning Semantics ("Disks per Node Pair")
+
+The **Disk Count** field on Step 1 is labeled "Disks per Node Pair" and is
+the input to `shelfCount = Math.ceil(diskCount / 24)` used throughout the
+cabling table, CLI generator, BOM, documentation, and SVG diagrams. This
+value is **per HA pair**, not a cluster-wide total -- a physical NS224/
+DS224C shelf's storage ports are fully consumed by one HA pair's redundant
+multipath wiring, so no two pairs ever share a shelf. Every HA pair in the
+cluster (or per MetroCluster site) is provisioned its own full, undivided
+`shelfCount` shelves, numbered sequentially and non-overlapping across pairs
+(pair 1: Shelf 1..N; pair 2: continues from N+1; ...). Total shelves for the
+whole cluster is therefore `shelfCount * numberOfHaPairs`, computed
+automatically from the configured node count -- there is no separate manual
+"how many shelves do I need" step. See `CHANGELOG.md`'s v1.7.3 entry for the
+prior bug this corrected (a `shelfCount / numPairs` division at 12 call
+sites that re-divided an already-per-pair value, undersizing every cluster
+with more than one HA pair).
 
 ## What this deliberately does NOT check
 

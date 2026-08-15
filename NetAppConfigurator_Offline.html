@@ -3118,7 +3118,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.2</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.3</span>
       </div>
     </header>
 
@@ -4966,7 +4966,7 @@ lucide.createIcons({icons});\``);if(typeof c>"u")throw new Error("`createIcons()
   <!-- App scripts -->
 
   <script>
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.2)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.3)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -9463,17 +9463,18 @@ function generateCablingRows() {
       }
 
       // 2. Storage Cabling (Shelves local to each site). Loops over HA pairs (not shelves) so
-      // every pair is guaranteed its own dedicated shelf cabling entry, even when the configured
-      // disk count yields fewer physical shelves per site than there are HA pairs -- pairs beyond
-      // shelfCount get the NEXT shelf number (Shelf A2, A3, ...), never reusing a shelf another
-      // pair already occupies: a single NS224 shelf has only 4 physical storage ports (2 per NSM),
-      // fully consumed by ONE HA pair's redundant multipath wiring, so two independent HA pairs
-      // can never physically share one shelf. validateForm() separately flags this under-
-      // provisioned case so the user knows to add disks/shelves, rather than the diagram silently
-      // implying more shelves exist than the sizing calculator's shelfCount says were ordered.
+      // every pair is guaranteed its own dedicated shelf cabling entries. state.sizing.diskCount
+      // is "Disks per Node Pair" (see the dynamic label in updateSizingDropdownOptions()), so
+      // shelfCount computed from it is already a PER-PAIR shelf count, not a cluster-wide total
+      // to be divided among pairs -- EVERY pair gets its own full shelfCount shelves, numbered
+      // sequentially across pairs (pair 1: Shelf A1..AshelfCount, pair 2: continues from there,
+      // etc.) so no two pairs' shelf numbers ever collide. A single NS224 shelf has only 4
+      // physical storage ports (2 per NSM), fully consumed by ONE HA pair's redundant multipath
+      // wiring, so two independent HA pairs can never physically share one shelf -- dividing
+      // shelfCount by numPairs (the prior bug here) starved every pair but the first of its
+      // rightful shelves instead.
       const numPairs = Math.max(1, Math.ceil(halfNodes / 2));
-      const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-      const sizingInfo = getExpansionCardsAndPorts(model, state.sizing.shelfType, shelvesPerPair);
+      const sizingInfo = getExpansionCardsAndPorts(model, state.sizing.shelfType, shelfCount);
 
       // Site A shelves
       for (let pairIdx = 1; pairIdx <= numPairs; pairIdx++) {
@@ -9485,12 +9486,10 @@ function generateCablingRows() {
           nodeA = 2 * pairIdx - 1;
           nodeB = 2 * pairIdx;
         }
-        const shelfStart = (pairIdx - 1) * shelvesPerPair;
-        const shelvesForThisPair = Math.min(shelvesPerPair, Math.max(1, shelfCount - shelfStart));
+        const shelfStart = (pairIdx - 1) * shelfCount;
 
-        for (let k = 0; k < shelvesForThisPair; k++) {
-          const rawShelfIdx = shelfStart + k;
-          const s = rawShelfIdx + 1;
+        for (let k = 0; k < shelfCount; k++) {
+          const s = shelfStart + k + 1;
           const stackIdx = Math.floor(k / stackSize);
           const activePorts = sizingInfo.portPairs[stackIdx] || sizingInfo.portPairs[sizingInfo.portPairs.length - 1];
 
@@ -9513,12 +9512,10 @@ function generateCablingRows() {
           nodeA = halfNodes + 2 * pairIdx - 1;
           nodeB = halfNodes + 2 * pairIdx;
         }
-        const shelfStart = (pairIdx - 1) * shelvesPerPair;
-        const shelvesForThisPair = Math.min(shelvesPerPair, Math.max(1, shelfCount - shelfStart));
+        const shelfStart = (pairIdx - 1) * shelfCount;
 
-        for (let k = 0; k < shelvesForThisPair; k++) {
-          const rawShelfIdx = shelfStart + k;
-          const s = rawShelfIdx + 1;
+        for (let k = 0; k < shelfCount; k++) {
+          const s = shelfStart + k + 1;
           const stackIdx = Math.floor(k / stackSize);
           const activePorts = sizingInfo.portPairs[stackIdx] || sizingInfo.portPairs[sizingInfo.portPairs.length - 1];
 
@@ -9587,26 +9584,26 @@ function generateCablingRows() {
         }
       }
 
-      // 2. Storage Cabling (shelves distributed across HA pairs; every pair gets its own
-      // dedicated shelf cabling entry, even if the configured disk count yields fewer physical
-      // shelves than HA pairs -- pairs beyond shelfCount get the NEXT shelf number (Shelf 2, 3,
-      // ...), never reusing a shelf another pair already occupies: a single NS224 shelf has only
-      // 4 physical storage ports (2 per NSM), fully consumed by ONE HA pair's redundant multipath
-      // wiring, so two independent HA pairs can never physically share one shelf. validateForm()
-      // separately flags this under-provisioned case.
+      // 2. Storage Cabling (shelves distributed across HA pairs). state.sizing.diskCount is
+      // "Disks per Node Pair" (see the dynamic label in updateSizingDropdownOptions()), so
+      // shelfCount computed from it is already a PER-PAIR shelf count, not a cluster-wide total
+      // to be divided among pairs -- EVERY pair gets its own full shelfCount shelves, numbered
+      // sequentially across pairs (pair 1: Shelf 1..shelfCount, pair 2: continues from there,
+      // etc.) so no two pairs' shelf numbers ever collide. A single NS224 shelf has only 4
+      // physical storage ports (2 per NSM), fully consumed by ONE HA pair's redundant multipath
+      // wiring, so two independent HA pairs can never physically share one shelf -- dividing
+      // shelfCount by numPairs (the prior bug here) starved every pair but the first of its
+      // rightful shelves instead.
       const numPairs = Math.max(1, Math.ceil(nodeCount / 2));
-      const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-      const sizingInfo = getExpansionCardsAndPorts(model, state.sizing.shelfType, shelvesPerPair);
+      const sizingInfo = getExpansionCardsAndPorts(model, state.sizing.shelfType, shelfCount);
 
       for (let pairIdx = 1; pairIdx <= numPairs; pairIdx++) {
         const nodeA = 2 * pairIdx - 1;
         const nodeB = 2 * pairIdx;
-        const shelfStart = (pairIdx - 1) * shelvesPerPair;
-        const shelvesForThisPair = Math.min(shelvesPerPair, Math.max(1, shelfCount - shelfStart));
+        const shelfStart = (pairIdx - 1) * shelfCount;
 
-        for (let k = 0; k < shelvesForThisPair; k++) {
-          const rawShelfIdx = shelfStart + k;
-          const shelfNum = rawShelfIdx + 1;
+        for (let k = 0; k < shelfCount; k++) {
+          const shelfNum = shelfStart + k + 1;
           const stackIdx = Math.floor(k / stackSize);
           const activePorts = sizingInfo.portPairs[stackIdx] || sizingInfo.portPairs[sizingInfo.portPairs.length - 1];
 
@@ -11277,15 +11274,12 @@ function generateOntapCliCode() {
     const shelfType = state.sizing.shelfType;
     const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
     
-    let numPairs = Math.max(1, nodeCount / 2);
-    let shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-    if (state.metrocluster && state.metrocluster.enabled) {
-      const halfNodes = nodeCount / 2;
-      const mPairs = Math.max(1, halfNodes / 2);
-      shelvesPerPair = Math.max(1, Math.ceil(shelfCount / mPairs));
-    }
-    
-    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
+    // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
+    // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
+    // generateCablingRows()), so this PCIe expansion-card requirement is the same for every node
+    // regardless of which pair it's in or whether MetroCluster is enabled -- it must not be
+    // divided further by the number of pairs.
+    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
     const ports = getControllerPorts(model);
 
     for (let i = 1; i <= nodeCount; i++) {
@@ -13339,24 +13333,14 @@ function validateForm() {
         });
       }
 
-      // Insufficient shelves for the configured HA pair count [NEW]. A single shelf's 4
-      // physical storage ports (2 per NSM) are fully consumed by one HA pair's redundant
-      // multipath wiring -- two independent HA pairs can never physically share one shelf, so
-      // the cabling diagram assigns each pair beyond shelfCount its own additional shelf number
-      // rather than an impossible shared connection. This warning explains that gap.
-      const effectiveNodeCount = parseInt(state.sizing.nodeCount) || 2;
-      const pairsNeeded = (state.metrocluster && state.metrocluster.enabled)
-        ? Math.max(1, Math.ceil((effectiveNodeCount / 2) / 2)) * 2 // per-site pairs, both sites
-        : Math.max(1, Math.ceil(effectiveNodeCount / 2));
-      if (state.platform === "ontap" && pairsNeeded > Math.max(1, shelfCount)) {
-        warnings.push({
-          step: 1,
-          title: "Insufficient Shelves for HA Pair Count",
-          msg: `Disk Count (${state.sizing.diskCount}) provisions ${Math.max(1, shelfCount)} shelf(es), but ${effectiveNodeCount} nodes need ${pairsNeeded} shelf(es) minimum -- one dedicated shelf per HA pair.`,
-          why: "Each NS224 shelf's 4 physical storage ports are fully consumed by a single HA pair's redundant multipath wiring. Separate HA pairs cannot share a shelf, so the cabling diagram now shows extra shelves beyond what the current Disk Count implies.",
-          fix: `Increase Disk Count on Step 1 so each HA pair gets its own shelf (at least ${pairsNeeded * 24} disks for ${pairsNeeded} shelf(es) of a 24-slot NS224), or reduce Node Count.`
-        });
-      }
+      // NOTE: state.sizing.diskCount is "Disks per Node Pair" for ONTAP (see the dynamic label
+      // in updateDiskSizeOptions()/updateSizingDropdownOptions()) -- shelfCount computed from it
+      // is already a PER-PAIR shelf count, not a cluster-wide total. Every HA pair automatically
+      // gets its own dedicated shelfCount shelves (see generateCablingRows()), so there is no
+      // "insufficient shelves for node count" scenario to warn about here; a warning comparing
+      // pair count against this per-pair shelfCount was comparing incompatible units and is
+      // removed. See CHANGELOG.md for the full correction (shelvesPerPair must equal shelfCount,
+      // never shelfCount/numPairs, everywhere that pattern appeared across the app).
 
       // Check if total volume size exceeds cluster usable physical capacity [NEW]
       if (state.sizing.usableGb > 0) {
@@ -15772,8 +15756,8 @@ function generateSvgPhysicalCabling() {
     const nodesPerSite = halfNodes;
 
     const numPairs = Math.max(1, halfNodes / 2);
-    const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
+    const totalShelvesPerSite = shelfCount * numPairs;
+    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
     const cardsNeeded = sizingInfo.cards.length;
     const nodeHeight = 55 + cardsNeeded * 18;
     const nodeSpacing = 85 + cardsNeeded * 18;
@@ -15781,7 +15765,7 @@ function generateSvgPhysicalCabling() {
     const startY = 60;
     const storageStartY = Math.max(startY + nodesPerSite * nodeSpacing, startY + 245) + 15;
     const svgWidth = 1000;
-    const svgHeight = storageStartY + shelfCount * 60 + (hasFabricPool ? 120 : 40);
+    const svgHeight = storageStartY + totalShelvesPerSite * 60 + (hasFabricPool ? 120 : 40);
 
     let svg = `<svg width="100%" height="100%" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" style="background:transparent; font-family:inherit;">`;
     
@@ -15909,7 +15893,7 @@ function generateSvgPhysicalCabling() {
     </g>`;
 
     // Site A Shelves
-    for (let s = 1; s <= shelfCount; s++) {
+    for (let s = 1; s <= totalShelvesPerSite; s++) {
       const yOff = storageStartY + (s - 1) * 60;
       svg += `  <!-- Site A Shelf A${s} -->
       <g transform="translate(20, ${yOff})">
@@ -16003,7 +15987,7 @@ function generateSvgPhysicalCabling() {
     </g>`;
 
     // Site B Shelves
-    for (let s = 1; s <= shelfCount; s++) {
+    for (let s = 1; s <= totalShelvesPerSite; s++) {
       const yOff = storageStartY + (s - 1) * 60;
       svg += `  <!-- Site B Shelf B${s} -->
       <g transform="translate(770, ${yOff})">
@@ -16100,9 +16084,9 @@ function generateSvgPhysicalCabling() {
     const isNvme = shelfType === "NS224";
     const stackSize = isNvme ? 2 : 4;
     
-    for (let s = 1; s <= shelfCount; s++) {
+    for (let s = 1; s <= totalShelvesPerSite; s++) {
       const yOff = storageStartY + (s - 1) * 60;
-      const pairIdx = Math.floor((s - 1) / shelvesPerPair) + 1;
+      const pairIdx = Math.floor((s - 1) / shelfCount) + 1;
       let nodeA, nodeB;
       if (halfNodes === 1) {
         nodeA = 1;
@@ -16111,8 +16095,8 @@ function generateSvgPhysicalCabling() {
         nodeA = 2 * pairIdx - 1;
         nodeB = 2 * pairIdx;
       }
-      
-      const shelfIdxWithinPair = (s - 1) % shelvesPerPair;
+
+      const shelfIdxWithinPair = (s - 1) % shelfCount;
       const stackIdx = Math.floor(shelfIdxWithinPair / stackSize);
       
       if (nodeA <= nodesPerSite) {
@@ -16142,9 +16126,9 @@ function generateSvgPhysicalCabling() {
       }
     }
 
-    for (let s = 1; s <= shelfCount; s++) {
+    for (let s = 1; s <= totalShelvesPerSite; s++) {
       const yOff = storageStartY + (s - 1) * 60;
-      const pairIdx = Math.floor((s - 1) / shelvesPerPair) + 1;
+      const pairIdx = Math.floor((s - 1) / shelfCount) + 1;
       let nodeA, nodeB;
       if (halfNodes === 1) {
         nodeA = 2;
@@ -16153,8 +16137,8 @@ function generateSvgPhysicalCabling() {
         nodeA = halfNodes + 2 * pairIdx - 1;
         nodeB = halfNodes + 2 * pairIdx;
       }
-      
-      const shelfIdxWithinPair = (s - 1) % shelvesPerPair;
+
+      const shelfIdxWithinPair = (s - 1) % shelfCount;
       const stackIdx = Math.floor(shelfIdxWithinPair / stackSize);
       
       if (nodeA > halfNodes && nodeA <= nodeCount) {
@@ -16201,12 +16185,13 @@ function generateSvgPhysicalCabling() {
   }
 
   // Set SVG dimensions dynamically for ONTAP
+  // Diagram is capped at the first 4 nodes (2 HA pairs) to avoid layout bloat;
+  // shelves shown are scoped to those same visible pairs (each pair gets its
+  // own full shelfCount, never shelfCount/numPairs — see CHANGELOG.md).
   const activeSvgNodes = Math.min(4, nodeCount);
-  const activeSvgShelves = shelfCount;
-  const numPairs = Math.max(1, nodeCount / 2);
-  const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-  const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
-  
+  const activeSvgShelves = Math.ceil(activeSvgNodes / 2) * shelfCount;
+  const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
+
   const startY = (clusterCabling === "switched" || nodeCount > 2) ? 100 : 40;
   const shelvesY = startY + activeSvgNodes * 80 + (nodeCount > 4 ? 20 : 10);
   
@@ -16344,7 +16329,7 @@ function generateSvgPhysicalCabling() {
   if (nodeCount > 4) {
     svg += `  <!-- Nodes note -->
     <g transform="translate(190, ${startY + activeSvgNodes * 80})">
-      <text x="210" y="10" fill="rgba(255,255,255,0.4)" font-size="8">Note: Displaying first 4 nodes of the configured ${nodeCount}-node cluster.</text>
+      <text x="210" y="10" fill="rgba(255,255,255,0.4)" font-size="8">Note: Displaying first 4 nodes (${activeSvgNodes / 2} HA pair(s)) and their shelves out of the configured ${nodeCount}-node cluster. See Step 6 for the full cabling table.</text>
     </g>`;
   }
 
@@ -16358,21 +16343,21 @@ function generateSvgPhysicalCabling() {
       <text x="80" y="32" fill="rgba(255,255,255,0.3)" font-size="7" font-weight="700">NSM A (Ports A/B)</text>
       <text x="290" y="32" fill="rgba(255,255,255,0.3)" font-size="7" font-weight="700">NSM B (Ports A/B)</text>
     </g>`;
-    
+
     svg += drawPort(285, yOff + 40, "e0a", "storage");
     svg += drawPort(315, yOff + 40, "e0b", "storage");
     svg += drawPort(495, yOff + 40, "e0a", "storage");
     svg += drawPort(525, yOff + 40, "e0b", "storage");
 
     // Connect node storage ports of HA pairs to shelf ports
-    // Shelves are distributed across active HA pairs dynamically
-    const pairIdx = Math.floor((s - 1) / shelvesPerPair) + 1;
+    // Each HA pair gets its own full shelfCount shelves (never shelfCount/numPairs)
+    const pairIdx = Math.floor((s - 1) / shelfCount) + 1;
     const nodeA = 2 * pairIdx - 1;
     const nodeB = 2 * pairIdx;
-    
+
     const isNvme = shelfType === "NS224";
     const stackSize = isNvme ? 2 : 4;
-    const shelfIdxWithinPair = (s - 1) % shelvesPerPair;
+    const shelfIdxWithinPair = (s - 1) % shelfCount;
     const stackIdx = Math.floor(shelfIdxWithinPair / stackSize);
     
     let pAx1, pAx2;
@@ -16432,8 +16417,8 @@ function generateSvgStorageOnlyCabling() {
     const nodesPerSite = halfNodes;
 
     const numPairs = Math.max(1, halfNodes / 2);
-    const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
+    const totalShelvesPerSite = shelfCount * numPairs;
+    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
     const cardsNeeded = sizingInfo.cards.length;
 
     const nodeHeight = 55 + cardsNeeded * 18;
@@ -16441,9 +16426,9 @@ function generateSvgStorageOnlyCabling() {
 
     const startY = 20;
     const shelvesY = startY + nodesPerSite * nodeSpacing + 10;
-    
+
     const svgWidth = 960;
-    const svgHeight = shelvesY + shelfCount * 95 + 15;
+    const svgHeight = shelvesY + totalShelvesPerSite * 95 + 15;
     
     let svg = `<svg width="100%" height="100%" viewBox="0 0 ${svgWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" style="background:transparent; font-family:inherit;">`;
     svg += `  <defs>
@@ -16491,7 +16476,7 @@ function generateSvgStorageOnlyCabling() {
     }
 
     // Draw Site A Shelves
-    for (let s = 1; s <= shelfCount; s++) {
+    for (let s = 1; s <= totalShelvesPerSite; s++) {
       const yOff = shelvesY + (s - 1) * 95;
       svg += `  <!-- Site A Shelf A${s} -->
       <g transform="translate(110, ${yOff})">
@@ -16507,10 +16492,10 @@ function generateSvgStorageOnlyCabling() {
       svg += drawPort(275, yOff + 35, "e0b");
 
       // Connect Site A Nodes to Site A Shelves
-      const pairIdx = Math.floor((s - 1) / shelvesPerPair) + 1;
+      const pairIdx = Math.floor((s - 1) / shelfCount) + 1;
       const isNvme = shelfType === "NS224";
       const stackSize = isNvme ? 2 : 4;
-      const shelfIdxWithinPair = (s - 1) % shelvesPerPair;
+      const shelfIdxWithinPair = (s - 1) % shelfCount;
       const stackIdx = Math.floor(shelfIdxWithinPair / stackSize);
       
       let nodeA, nodeB;
@@ -16571,7 +16556,7 @@ function generateSvgStorageOnlyCabling() {
     }
 
     // Draw Site B Shelves
-    for (let s = 1; s <= shelfCount; s++) {
+    for (let s = 1; s <= totalShelvesPerSite; s++) {
       const yOff = shelvesY + (s - 1) * 95;
       svg += `  <!-- Site B Shelf B${s} -->
       <g transform="translate(640, ${yOff})">
@@ -16587,10 +16572,10 @@ function generateSvgStorageOnlyCabling() {
       svg += drawPort(805, yOff + 35, "e0b");
 
       // Connect Site B Nodes to Site B Shelves
-      const pairIdx = Math.floor((s - 1) / shelvesPerPair) + 1;
+      const pairIdx = Math.floor((s - 1) / shelfCount) + 1;
       const isNvme = shelfType === "NS224";
       const stackSize = isNvme ? 2 : 4;
-      const shelfIdxWithinPair = (s - 1) % shelvesPerPair;
+      const shelfIdxWithinPair = (s - 1) % shelfCount;
       const stackIdx = Math.floor(shelfIdxWithinPair / stackSize);
       
       let nodeA, nodeB;
@@ -16630,13 +16615,14 @@ function generateSvgStorageOnlyCabling() {
     return svg;
   }
 
+  // Diagram is capped at the first 4 nodes (2 HA pairs) to avoid layout bloat;
+  // shelves shown are scoped to those same visible pairs (each pair gets its
+  // own full shelfCount, never shelfCount/numPairs — see CHANGELOG.md).
   const activeSvgNodes = Math.min(4, nodeCount);
-  const activeSvgShelves = shelfCount;
-  
-  const numPairs = Math.max(1, nodeCount / 2);
-  const shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-  const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
-  
+  const activeSvgShelves = Math.ceil(activeSvgNodes / 2) * shelfCount;
+  const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
+
+
   const startY = 20;
   const nodeSpacing = 80;
   const shelvesY = startY + activeSvgNodes * nodeSpacing + 10;
@@ -16704,15 +16690,15 @@ function generateSvgStorageOnlyCabling() {
     svg += drawPort(525, yOff + 40, "e0b");
 
     // Connect node storage ports of HA pairs to shelf ports
-    const pairIdx = Math.floor((s - 1) / shelvesPerPair) + 1;
+    const pairIdx = Math.floor((s - 1) / shelfCount) + 1;
     const nodeA = 2 * pairIdx - 1;
     const nodeB = 2 * pairIdx;
-    
+
     const isNvme = shelfType === "NS224";
     const stackSize = isNvme ? 2 : 4;
-    const shelfIdxWithinPair = (s - 1) % shelvesPerPair;
+    const shelfIdxWithinPair = (s - 1) % shelfCount;
     const stackIdx = Math.floor(shelfIdxWithinPair / stackSize);
-    
+
     if (nodeA <= activeSvgNodes) {
       const yA = startY + (nodeA - 1) * nodeSpacing;
       const portAY = yA + 42.5 + stackIdx * 18;
@@ -17383,15 +17369,12 @@ function generateBillOfMaterials() {
     const shelfType = state.sizing.shelfType;
     const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
     
-    let numPairs = Math.max(1, nodeCount / 2);
-    let shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-    if (state.metrocluster && state.metrocluster.enabled) {
-      const halfNodes = nodeCount / 2;
-      const mPairs = Math.max(1, halfNodes / 2);
-      shelvesPerPair = Math.max(1, Math.ceil(shelfCount / mPairs));
-    }
-    
-    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
+    // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
+    // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
+    // generateCablingRows()), so this PCIe expansion-card requirement is the same for every node
+    // regardless of which pair it's in or whether MetroCluster is enabled -- it must not be
+    // divided further by the number of pairs.
+    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
     if (sizingInfo.cards.length > 0) {
       const cardMap = {};
       sizingInfo.cards.forEach(card => {
@@ -18080,15 +18063,12 @@ function generateHldLldDesign() {
     const shelfCount = Math.max(1, Math.ceil(state.sizing.diskCount / 24));
     const nodeCount = parseInt(state.sizing.nodeCount);
     
-    let numPairs = Math.max(1, nodeCount / 2);
-    let shelvesPerPair = Math.max(1, Math.ceil(shelfCount / numPairs));
-    if (state.metrocluster && state.metrocluster.enabled) {
-      const halfNodes = nodeCount / 2;
-      const mPairs = Math.max(1, halfNodes / 2);
-      shelvesPerPair = Math.max(1, Math.ceil(shelfCount / mPairs));
-    }
-    
-    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelvesPerPair);
+    // state.sizing.diskCount is "Disks per Node Pair" -- shelfCount computed from it is already
+    // a PER-PAIR shelf count. Every HA pair gets its own dedicated shelfCount shelves (see
+    // generateCablingRows()), so this PCIe expansion-card requirement is the same for every node
+    // regardless of which pair it's in or whether MetroCluster is enabled -- it must not be
+    // divided further by the number of pairs.
+    const sizingInfo = getExpansionCardsAndPorts(model, shelfType, shelfCount);
     if (sizingInfo.cards.length > 0) {
       doc += `* **Storage Expansion PCIe Cards:**\n`;
       sizingInfo.cards.forEach(card => {
