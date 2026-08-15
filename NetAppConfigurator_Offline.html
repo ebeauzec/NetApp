@@ -3118,7 +3118,7 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
         <button class="btn-secondary-top" id="btnReset" title="Reset configurator to defaults">
           <i data-lucide="rotate-ccw"></i> Reset
         </button>
-        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.4</span>
+        <span class="brand-tag" style="background: rgba(16, 185, 129, 0.1); color: var(--color-success); border-color: rgba(16, 185, 129, 0.25);">v1.7.5</span>
       </div>
     </header>
 
@@ -4966,7 +4966,7 @@ lucide.createIcons({icons});\``);if(typeof c>"u")throw new Error("`createIcons()
   <!-- App scripts -->
 
   <script>
-// NetApp Enterprise Configurator & Code Generator Engine (v1.7.4)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.7.5)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -16336,22 +16336,31 @@ function generateSvgPhysicalCabling() {
     });
 
     // Cables from cluster ports
+    // Each node's cable lands on its own point along the destination switch's edge
+    // (fanned out by node index) instead of every node converging on one fixed
+    // coordinate, which drew as "every cable plugged into the same port."
+    const fanFrac = (i + 0.5) / activeSvgNodes;
     if (isDirect) {
       if (i === 0) {
         svg += `  <path d="M 218 ${yOff + 57} L 218 ${yOff + 80 + 42}" stroke="#00f2fe" stroke-width="2.5" fill="none" opacity="0.8"/>`;
         svg += `  <path d="M 248 ${yOff + 57} L 248 ${yOff + 80 + 42}" stroke="#00f2fe" stroke-width="2.5" fill="none" opacity="0.8"/>`;
       }
     } else {
-      svg += `  <path d="M 218 ${yOff + 42} C 218 ${yOff}, 260 50, 315 60" stroke="#00f2fe" stroke-width="2" fill="none" opacity="0.8"/>`;
-      svg += `  <path d="M 248 ${yOff + 42} C 248 ${yOff}, 380 50, 485 60" stroke="#00f2fe" stroke-width="2" fill="none" opacity="0.8"/>`;
+      const clusterSw1X = 240 + fanFrac * 150;
+      const clusterSw2X = 410 + fanFrac * 150;
+      svg += `  <path d="M 218 ${yOff + 42} C 218 ${yOff}, 260 50, ${clusterSw1X} 60" stroke="#00f2fe" stroke-width="2" fill="none" opacity="0.8"/>`;
+      svg += `  <path d="M 248 ${yOff + 42} C 248 ${yOff}, 380 50, ${clusterSw2X} 60" stroke="#00f2fe" stroke-width="2" fill="none" opacity="0.8"/>`;
     }
 
     // Cables to management switch
-    svg += `  <path d="M 378 ${yOff + 42} C 378 ${yOff + 70}, 160 ${mgmtY + 25}, 150 ${mgmtY + 25}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="3,3" fill="none" opacity="0.7"/>`;
+    const mgmtEndY = mgmtY + fanFrac * 50;
+    svg += `  <path d="M 378 ${yOff + 42} C 378 ${yOff + 70}, 160 ${mgmtEndY}, 150 ${mgmtEndY}" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="3,3" fill="none" opacity="0.7"/>`;
 
     // Cables to data switches
-    svg += `  <path d="M 428 ${yOff + 42} C 428 ${yOff - 10}, 600 ${dataAY + 25}, 650 ${dataAY + 25}" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.8"/>`;
-    svg += `  <path d="M 458 ${yOff + 42} C 458 ${yOff + 70}, 600 ${dataBY + 25}, 650 ${dataBY + 25}" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.8"/>`;
+    const dataAEndY = dataAY + fanFrac * 50;
+    const dataBEndY = dataBY + fanFrac * 50;
+    svg += `  <path d="M 428 ${yOff + 42} C 428 ${yOff - 10}, 600 ${dataAEndY}, 650 ${dataAEndY}" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.8"/>`;
+    svg += `  <path d="M 458 ${yOff + 42} C 458 ${yOff + 70}, 600 ${dataBEndY}, 650 ${dataBEndY}" stroke="#a855f7" stroke-width="2" fill="none" opacity="0.8"/>`;
   }
 
   if (nodeCount > 4) {

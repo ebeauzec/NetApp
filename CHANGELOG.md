@@ -2,6 +2,11 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.7.5] - 2026-08-15
+
+### Fixed
+- **All Nodes' Cables Visually Converged on a Single Point on Each Switch**: In `generateSvgPhysicalCabling()`'s standard (non-MetroCluster) diagram, every node's cable to the cluster switches, management switch, and data switches ended at the exact same hardcoded coordinate regardless of which node it came from -- e.g. all 4 nodes' Data Fabric B cables ended at the literal same `(650, dataBY + 25)` point. This rendered as every cable appearing to plug into one shared port, even though each node's cabling table row (Step 6) already had its own distinct, correctly-numbered destination port. Each node's cable endpoint is now fanned out to its own position along the destination switch's edge (spaced evenly by node index), so the diagram visually matches the 1:1 port assignments the underlying cabling data already had.
+
 ## [1.7.4] - 2026-08-15
 
 ### Fixed
