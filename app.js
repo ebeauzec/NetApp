@@ -1,4 +1,4 @@
-// NetApp Enterprise Configurator & Code Generator Engine (v1.8.0)
+// NetApp Enterprise Configurator & Code Generator Engine (v1.8.1)
 // Built using vanilla ES6 JS, CDN JSZip, PrismJS and Lucide Icons
 
 // 1. CONSTANTS & VERSION OPTIONS
@@ -3994,8 +3994,16 @@ function updateSizingDropdownOptions() {
       state.sizing.nodeCount = 4;
     }
   } else {
-    const ontapNodeCounts = [2, 4, 6, 8, 12];
-    if (prevNodeCount && !ontapNodeCounts.includes(prevNodeCount)) {
+    // ONTAP caps a cluster at 12 nodes if it serves any SAN protocol anywhere (ASA platforms
+    // are always SAN-only), or 24 nodes for NAS-only -- confirmed via NetApp's "Determine the
+    // maximum supported nodes and SAN hosts per ONTAP cluster" guidance (docs.netapp.com/us-en/
+    // ontap/san-config/determine-supported-nodes-task.html) and long-standing published cDOT
+    // architecture limits. See DATA_SOURCES.md.
+    const activeProtocolsForNodeCap = state.protocols || [state.protocol || "nfs"];
+    const isSanClusterWide = state.ontapPlatform === "asa" || activeProtocolsForNodeCap.some(p => isSanProtocol(p));
+    const maxOntapNodes = isSanClusterWide ? 12 : 24;
+    const ontapNodeCounts = [2, 4, 6, 8, 12, 16, 20, 24].filter(n => n <= maxOntapNodes);
+    if (prevNodeCount && !ontapNodeCounts.includes(prevNodeCount) && prevNodeCount <= maxOntapNodes) {
       ontapNodeCounts.push(prevNodeCount);
       ontapNodeCounts.sort((a, b) => a - b);
     }
@@ -4333,6 +4341,20 @@ function getRealMaxNs224Shelves(model) {
   return null;
 }
 
+// Real DS224C/DS212C (SAS) maximum total shelves per HA pair. Coverage is intentionally
+// partial: SAS stack depth and shelf count vary far more by HBA/port configuration than
+// NS224's roughly-fixed hot-add counts, and most current-gen AFF/ASA platforms (NVMe-native)
+// are only lightly documented for SAS use -- e.g. AFF A400 supports up to 20 DS224C shelves,
+// well beyond this app's existing disk-count range, so leaving unlisted platforms uncapped
+// here is not known to permit an unsupported selection. Returns null (no cap applied) for any
+// platform not listed. See DATA_SOURCES.md.
+function getRealMaxSasShelves(model) {
+  const m = (model || "").toUpperCase();
+  if (m.includes("A150")) return 3;              // 1 onboard + up to 2 expansion (72 SAS SSDs / 24 = 3 shelves)
+  if (m.includes("A250") || m.includes("C250")) return 2; // NVMe-native onboard + at most 1 DS224C shelf (largely a legacy-migration path, not a new-deployment scale-out path)
+  return null;
+}
+
 function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
   const m = model.toUpperCase();
   const isNvme = shelfType === "NS224";
@@ -4399,10 +4421,10 @@ function getExpansionCardsAndPorts(model, shelfType, shelfCount) {
   // Prefer the real, sourced per-platform NS224 max (getRealMaxNs224Shelves()) over the
   // PCIe-slot-count formula wherever it's available -- the formula is only a rough estimate
   // and is known to disagree with real NetApp-published limits (see that function's comment).
-  const realMaxShelves = getRealMaxNs224Shelves(model);
+  const realMaxShelves = shelfType === "NS224" ? getRealMaxNs224Shelves(model) : getRealMaxSasShelves(model);
   const formulaMaxShelves = stackSize * (slotPriority.length + 1);
-  result.maxDirectAttachShelves = (shelfType === "NS224" && realMaxShelves !== null) ? realMaxShelves : formulaMaxShelves;
-  result.maxShelvesVerified = shelfType === "NS224" && realMaxShelves !== null;
+  result.maxDirectAttachShelves = realMaxShelves !== null ? realMaxShelves : formulaMaxShelves;
+  result.maxShelvesVerified = realMaxShelves !== null;
 
   if (cardsNeeded <= 0) {
     result.overflow = shelfCount > result.maxDirectAttachShelves;

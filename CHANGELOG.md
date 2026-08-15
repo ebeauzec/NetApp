@@ -2,6 +2,29 @@
 
 All notable changes to the NetApp Solutions Architect Configurator will be documented in this file.
 
+## [1.8.1] - 2026-08-15
+
+Closes out the gaps explicitly flagged as unresearched in v1.8.0's `DATA_SOURCES.md` update:
+DS224C/DS212C (SAS) shelf limits and ONTAP cluster node-count limits.
+
+### Added
+- **Real SAS (DS224C/DS212C) Shelf Caps for AFF/ASA A150, A250, C250**: Added
+  `getRealMaxSasShelves()`, sourced the same way as v1.8.0's NS224 table. AFF/ASA A150 caps at
+  3 shelves (72 disks); A250/C250 cap at 2 (48 disks) -- both platforms where the tool's
+  previous unconstrained range (up to 144 disks / 6 shelves) meaningfully exceeded real
+  capacity. Coverage is intentionally partial: SAS stack depth is far more configuration
+  dependent than NS224's roughly-fixed hot-add counts, and the one high-end data point found
+  (AFF A400: up to 20 DS224C shelves / 480 disks) is already far beyond this tool's disk-count
+  range, so leaving other platforms uncapped here is not known to permit an unsupported
+  selection. See `DATA_SOURCES.md`.
+- **Real ONTAP Cluster Node-Count Cap by Protocol**: The Node Count dropdown previously offered
+  the same `[2, 4, 6, 8, 12]` regardless of platform or protocol. It now caps at 12 nodes for
+  any cluster serving a SAN protocol (iSCSI/FC/FCoE/NVMe over TCP or FC) anywhere, or
+  unconditionally for ASA (SAN-only by definition) -- and at 24 nodes, with the
+  previously-missing 16/20/24 options now offered, for NAS-only (NFS/SMB) clusters. This is a
+  real, sourced ONTAP-wide cluster architecture limit (NetApp's "Determine the maximum
+  supported nodes and SAN hosts per ONTAP cluster" guidance), not platform-hardware-specific.
+
 ## [1.8.0] - 2026-08-15
 
 Full-codebase audit against NetApp's own hardware documentation, prompted by a request to
